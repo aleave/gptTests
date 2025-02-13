@@ -19,16 +19,14 @@
       animate();
 
       function init() {
-        // Create scene
+        // Create the scene
         scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
 
-        // Set up a perspective camera.
-        // We'll adjust positions so the creature remains centered.
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-        // Position the camera far enough out so that our scene (which is centered dynamically) is visible.
-        camera.position.z = 500;
+        // Create an orthographic camera so that (0,0) is at the center.
+        updateCamera();
 
-        // Create renderer with full window size
+        // Create renderer that fills the window
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -39,24 +37,42 @@
         const positions = new Float32Array(numPoints * 3);
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-        // Simple white points material
+        // White points material (you can adjust size if needed)
         material = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
         points = new THREE.Points(geometry, material);
         scene.add(points);
 
-        // Adjust renderer on window resize
+        // Handle window resize
         window.addEventListener('resize', onWindowResize, false);
       }
 
+      // Create or update the orthographic camera.
+      function updateCamera() {
+        // We'll use a camera with the center at 0,0.
+        const aspect = window.innerWidth / window.innerHeight;
+        const frustumHeight = window.innerHeight;
+        const frustumWidth = window.innerWidth;
+        // Orthographic camera: left, right, top, bottom, near, far.
+        camera = new THREE.OrthographicCamera(
+          -frustumWidth / 2, 
+           frustumWidth / 2, 
+           frustumHeight / 2, 
+          -frustumHeight / 2, 
+          -1000, 
+           1000
+        );
+        camera.position.set(0, 0, 500);
+        camera.lookAt(0, 0, 0);
+      }
+
       function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        updateCamera();
       }
 
       function animate() {
         requestAnimationFrame(animate);
-        // Slower time progression (original was PI/60; now reduced)
+        // Increase time more slowly than before (was PI/60, now PI/240)
         t += Math.PI / 240;
         updatePoints();
         renderer.render(scene, camera);
@@ -66,15 +82,12 @@
         const positions = geometry.attributes.position.array;
         const count = positions.length / 3;
 
-        // We'll re-center the drawing based on the window dimensions.
-        // Use the window center as the offset instead of fixed 200,200.
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        // Scale factor: based on a 400x400 base canvas, so it fills the screen.
+        // We center the creature at (0,0) and scale based on the window size.
+        // Here our base canvas is considered 400x400.
         const scale = Math.min(window.innerWidth, window.innerHeight) / 400;
 
+        // Loop over our grid and compute positions
         for (let i = 0; i < count; i++) {
-          // Calculate grid coordinates
           const xVal = i % GRID_SIZE;
           const yVal = Math.floor(i / GRID_SIZE);
 
@@ -85,11 +98,10 @@
           const q = xVal / 4 + 90 + d * k * (1 + Math.cos(d * 4 - t * 2 + yVal / 72));
           const c = (yVal * e) / 594 - t / 8 + d / 6;
 
-          // Re-map to (X,Y) positions.
-          // Instead of fixed offsets (200,200), we use the window center,
-          // and apply a scale factor so that the creature fits nicely.
-          const X = scale * (q * Math.cos(c)) + centerX;
-          const Y = scale * ((q / 2 + 99 * Math.cos(c / 2)) * Math.sin(c) + e * 6) + centerY;
+          // Re-map to (X, Y) positions using our scale factor.
+          // Instead of fixed offsets (200,200), the creature is centered at (0,0).
+          const X = scale * (q * Math.cos(c));
+          const Y = scale * ((q / 2 + 99 * Math.cos(c / 2)) * Math.sin(c) + e * 6);
           const Z = 0;
 
           positions[3 * i] = X;

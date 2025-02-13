@@ -84,4 +84,66 @@
     }
 
     // Generate initial obstacles along each segment
-    for (let i = 0; i < numS
+    for (let i = 0; i < numSegments; i++) {
+      const baseZ = -i * segmentLength;
+      const count = Math.floor(Math.random() * 3) + 1; // 1-3 obstacles per segment
+      for (let j = 0; j < count; j++) {
+        const offsetZ = Math.random() * segmentLength;
+        createAbstractObstacle(baseZ - offsetZ);
+      }
+    }
+
+    // Animation parameters
+    const scrollSpeed = 0.15; // how fast the scene moves (simulate forward movement)
+    let clock = new THREE.Clock();
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+
+      // Move camera forward along z-axis
+      camera.position.z -= scrollSpeed;
+
+      // Recycle road segments: when a segment goes past the camera, move it to the back
+      roadSegments.forEach(segment => {
+        if (segment.position.z - segmentLength / 2 > camera.position.z) {
+          segment.position.z -= numSegments * segmentLength;
+        }
+      });
+
+      // Move obstacles along with the scene
+      obstacles.forEach(obstacle => {
+        // Subtle pulsing effect: scale oscillates over time.
+        const scale = 1 + 0.2 * Math.sin(Date.now() * 0.005 + obstacle.position.z);
+        obstacle.scale.set(scale, scale, scale);
+
+        // Recycle obstacles that have passed the camera
+        if (obstacle.position.z > camera.position.z + 2) {
+          // Remove from scene and array
+          obstacleGroup.remove(obstacle);
+        }
+      });
+
+      // Clean up obstacles array and generate new obstacles ahead if needed
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        if (obstacles[i].position.z > camera.position.z + 2) {
+          obstacles.splice(i, 1);
+          // Create a new obstacle further ahead
+          createAbstractObstacle(camera.position.z - (Math.random() * segmentLength + segmentLength));
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

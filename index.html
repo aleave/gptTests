@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Isometric Room Game Prototype</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #instructions {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      font-family: sans-serif;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="instructions">
+    <strong>Controls:</strong> Arrow Keys or WASD to move
+  </div>
+  <!-- Include Three.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
+  <script>
+    // Setup scene, renderer, and camera
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // For isometric view, we use an OrthographicCamera
+    const aspect = window.innerWidth / window.innerHeight;
+    const d = 20;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+    // Position the camera to mimic an isometric angle (diagonally above the scene)
+    camera.position.set(30, 30, 30);
+    camera.lookAt(scene.position);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(20, 40, 20);
+    scene.add(directionalLight);
+
+    // Floor
+    const floorGeometry = new THREE.PlaneGeometry(50, 50);
+    const floorMaterial = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // Walls (four walls to enclose the room)
+    const wallHeight = 10;
+    const wallWidth = 50;
+    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xffaa00, side: THREE.DoubleSide });
+    
+    // Back Wall (South)
+    const backWallGeometry = new THREE.PlaneGeometry(wallWidth, wallHeight);
+    const backWall = new THREE.Mesh(backWallGeometry, wallMaterial);
+    backWall.position.set(0, wallHeight / 2, -25);
+    scene.add(backWall);
+    
+    // Front Wall (North)
+    const frontWall = new THREE.Mesh(backWallGeometry, wallMaterial);
+    frontWall.position.set(0, wallHeight / 2, 25);
+    frontWall.rotation.y = Math.PI;
+    scene.add(frontWall);
+    
+    // Left Wall (West)
+    const leftWallGeometry = new THREE.PlaneGeometry(wallWidth, wallHeight);
+    const leftWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
+    leftWall.position.set(-25, wallHeight / 2, 0);
+    leftWall.rotation.y = Math.PI / 2;
+    scene.add(leftWall);
+    
+    // Right Wall (East)
+    const rightWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
+    rightWall.position.set(25, wallHeight / 2, 0);
+    rightWall.rotation.y = -Math.PI / 2;
+    scene.add(rightWall);
+
+    // Player cube
+    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+    const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+    const player = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    // Position so that its bottom touches the floor
+    player.position.set(0, 1, 0);
+    scene.add(player);
+
+    // Keyboard controls for moving the cube
+    document.addEventListener('keydown', function(event) {
+      const speed = 1;
+      switch (event.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          player.position.z -= speed;
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          player.position.z += speed;
+          break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          player.position.x -= speed;
+          break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          player.position.x += speed;
+          break;
+      }
+    });
+
+    // Handle window resizing
+    window.addEventListener('resize', function() {
+      const aspect = window.innerWidth / window.innerHeight;
+      camera.left = -d * aspect;
+      camera.right = d * aspect;
+      camera.top = d;
+      camera.bottom = -d;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Three.js Viz</title>
+    <title>Full Screen Three.js Creature</title>
     <style>
       body { margin: 0; overflow: hidden; }
     </style>
@@ -13,42 +13,51 @@
     <script>
       let scene, camera, renderer, points, geometry, material;
       let t = 0;
-      const WIDTH = 400, HEIGHT = 400;
-      const GRID_SIZE = 200; // using a 200x200 grid => 40,000 points
+      const GRID_SIZE = 200; // 200x200 grid => 40,000 points
 
       init();
       animate();
 
       function init() {
-        // Create scene and camera
+        // Create scene
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(45, WIDTH / HEIGHT, 1, 1000);
+
+        // Set up a perspective camera.
+        // We'll adjust positions so the creature remains centered.
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+        // Position the camera far enough out so that our scene (which is centered dynamically) is visible.
         camera.position.z = 500;
-        
-        // Create renderer and append to document
+
+        // Create renderer with full window size
         renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(WIDTH, HEIGHT);
+        renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
-        
-        // Create BufferGeometry for points
-        const numPoints = GRID_SIZE * GRID_SIZE; // 40,000 points
+
+        // Create BufferGeometry for 40,000 points
+        const numPoints = GRID_SIZE * GRID_SIZE;
         geometry = new THREE.BufferGeometry();
-        // Allocate a Float32Array for positions (x, y, z per point)
         const positions = new Float32Array(numPoints * 3);
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        
-        // Use a simple white points material
+
+        // Simple white points material
         material = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
-        
-        // Create Points and add to scene
         points = new THREE.Points(geometry, material);
         scene.add(points);
+
+        // Adjust renderer on window resize
+        window.addEventListener('resize', onWindowResize, false);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
       function animate() {
         requestAnimationFrame(animate);
-        // Increment t similar to your original code (t+=PI/60)
-        t += Math.PI / 60;
+        // Slower time progression (original was PI/60; now reduced)
+        t += Math.PI / 240;
         updatePoints();
         renderer.render(scene, camera);
       }
@@ -56,29 +65,33 @@
       function updatePoints() {
         const positions = geometry.attributes.position.array;
         const count = positions.length / 3;
+
+        // We'll re-center the drawing based on the window dimensions.
+        // Use the window center as the offset instead of fixed 200,200.
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        // Scale factor: based on a 400x400 base canvas, so it fills the screen.
+        const scale = Math.min(window.innerWidth, window.innerHeight) / 400;
+
         for (let i = 0; i < count; i++) {
-          // Determine the grid coordinates:
+          // Calculate grid coordinates
           const xVal = i % GRID_SIZE;
           const yVal = Math.floor(i / GRID_SIZE);
-          
-          // Compute intermediate values following the original code:
-          // k = x/8 - 12.5
+
+          // Original intermediate computations:
           const k = xVal / 8 - 12.5;
-          // e = cos(k) + sin(y/24) + cos(k/2)
           const e = Math.cos(k) + Math.sin(yVal / 24) + Math.cos(k / 2);
-          // d = abs(e)
           const d = Math.abs(e);
-          // q = x/4 + 90 + d*k*(1 + cos(d*4 - t*2 + y/72))
           const q = xVal / 4 + 90 + d * k * (1 + Math.cos(d * 4 - t * 2 + yVal / 72));
-          // c = y*e/594 - t/8 + d/6
           const c = (yVal * e) / 594 - t / 8 + d / 6;
-          
-          // Compute final positions (2D from the original code; z set to 0)
-          const X = q * Math.cos(c) + 200;
-          const Y = (q / 2 + 99 * Math.cos(c / 2)) * Math.sin(c) + e * 6 + 200;
+
+          // Re-map to (X,Y) positions.
+          // Instead of fixed offsets (200,200), we use the window center,
+          // and apply a scale factor so that the creature fits nicely.
+          const X = scale * (q * Math.cos(c)) + centerX;
+          const Y = scale * ((q / 2 + 99 * Math.cos(c / 2)) * Math.sin(c) + e * 6) + centerY;
           const Z = 0;
-          
-          // Update the positions array
+
           positions[3 * i] = X;
           positions[3 * i + 1] = Y;
           positions[3 * i + 2] = Z;

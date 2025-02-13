@@ -2,153 +2,86 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Isometric Room Game Prototype - Bounded Movement</title>
+  <title>Infinite Minimalistic Scroller</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; }
     #instructions {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255,255,255,0.8);
-      padding: 10px;
+      color: #eee;
       font-family: sans-serif;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
       border-radius: 4px;
     }
   </style>
 </head>
 <body>
   <div id="instructions">
-    <strong>Controls:</strong> Arrow Keys or WASD to move<br>
-    The cube is confined within the room.
+    Infinite Minimalistic Scroller<br>
+    Enjoy the ambient, abstract journey.
   </div>
-  <!-- Include Three.js from CDN -->
+  <!-- Include Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
   <script>
-    // Setup scene, renderer, and camera
+    // Scene, Camera, Renderer Setup
     const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 4, 10);
+    camera.lookAt(0, 0, -20);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setClearColor(0x000000);
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Use an OrthographicCamera for isometric view
-    const aspect = window.innerWidth / window.innerHeight;
-    const d = 20;
-    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-    camera.position.set(30, 30, 30);
-    camera.lookAt(scene.position);
-
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Ambient & Directional Lighting (soft, minimal)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(20, 40, 20);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    directionalLight.position.set(0, 10, 5);
     scene.add(directionalLight);
 
-    // Floor
-    const floorGeometry = new THREE.PlaneGeometry(50, 50);
-    const floorMaterial = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    scene.add(floor);
-
-    // Walls (defining the room)
-    const wallHeight = 10;
-    const wallWidth = 50;
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xffaa00, side: THREE.DoubleSide });
-    
-    // Back Wall (South)
-    const backWallGeometry = new THREE.PlaneGeometry(wallWidth, wallHeight);
-    const backWall = new THREE.Mesh(backWallGeometry, wallMaterial);
-    backWall.position.set(0, wallHeight / 2, -25);
-    scene.add(backWall);
-    
-    // Front Wall (North)
-    const frontWall = new THREE.Mesh(backWallGeometry, wallMaterial);
-    frontWall.position.set(0, wallHeight / 2, 25);
-    frontWall.rotation.y = Math.PI;
-    scene.add(frontWall);
-    
-    // Left Wall (West)
-    const leftWallGeometry = new THREE.PlaneGeometry(wallWidth, wallHeight);
-    const leftWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
-    leftWall.position.set(-25, wallHeight / 2, 0);
-    leftWall.rotation.y = Math.PI / 2;
-    scene.add(leftWall);
-    
-    // Right Wall (East)
-    const rightWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
-    rightWall.position.set(25, wallHeight / 2, 0);
-    rightWall.rotation.y = -Math.PI / 2;
-    scene.add(rightWall);
-
-    // Player cube
-    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-    const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
-    const player = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    // Position so that its bottom touches the floor (cube height / 2)
-    player.position.set(0, 1, 0);
-    scene.add(player);
-
-    // Keyboard controls with boundary checks
-    document.addEventListener('keydown', function(event) {
-      const speed = 1;
-      // Copy the current position
-      let newX = player.position.x;
-      let newZ = player.position.z;
-      
-      switch (event.key) {
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-          newZ -= speed;
-          break;
-        case 'ArrowDown':
-        case 's':
-        case 'S':
-          newZ += speed;
-          break;
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-          newX -= speed;
-          break;
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-          newX += speed;
-          break;
-      }
-      
-      // Define room boundaries (considering cube's half-size, 1 unit)
-      const halfSize = 1;
-      const minX = -25 + halfSize;
-      const maxX = 25 - halfSize;
-      const minZ = -25 + halfSize;
-      const maxZ = 25 - halfSize;
-      
-      // Clamp the new positions to remain within the room
-      player.position.x = Math.min(maxX, Math.max(minX, newX));
-      player.position.z = Math.min(maxZ, Math.max(minZ, newZ));
+    // Minimalistic Road Segments (wireframe planes)
+    const roadWidth = 8;
+    const segmentLength = 30;
+    const numSegments = 5;
+    const roadSegments = [];
+    const roadMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      opacity: 0.3,
+      transparent: true
     });
+    const roadGeometry = new THREE.PlaneGeometry(roadWidth, segmentLength, 2, 2);
 
-    // Handle window resizing
-    window.addEventListener('resize', function() {
-      const aspect = window.innerWidth / window.innerHeight;
-      camera.left = -d * aspect;
-      camera.right = d * aspect;
-      camera.top = d;
-      camera.bottom = -d;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Animation loop
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
+    for (let i = 0; i < numSegments; i++) {
+      const segment = new THREE.Mesh(roadGeometry, roadMaterial);
+      segment.rotation.x = -Math.PI / 2;
+      segment.position.z = -i * segmentLength;
+      scene.add(segment);
+      roadSegments.push(segment);
     }
-    animate();
-  </script>
-</body>
-</html>
+
+    // Abstract, minimal obstacles: floating, pulsating shapes
+    const obstacles = [];
+    const obstacleGroup = new THREE.Group();
+    scene.add(obstacleGroup);
+
+    function createAbstractObstacle(zPos) {
+      // Use a simple sphere with a neon tint and wireframe overlay for a futuristic look.
+      const geometry = new THREE.SphereGeometry(0.8, 16, 16);
+      const material = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true, opacity: 0.6, transparent: true });
+      const mesh = new THREE.Mesh(geometry, material);
+      // Place it randomly within the road bounds (x) and at a random height (y)
+      mesh.position.set((Math.random() - 0.5) * (roadWidth - 2), 1 + Math.random() * 2, zPos);
+      obstacleGroup.add(mesh);
+      obstacles.push(mesh);
+    }
+
+    // Generate initial obstacles along each segment
+    for (let i = 0; i < numS

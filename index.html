@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Isometric Room Game Prototype</title>
+  <title>Isometric Room Game Prototype - Bounded Movement</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -19,7 +19,8 @@
 </head>
 <body>
   <div id="instructions">
-    <strong>Controls:</strong> Arrow Keys or WASD to move
+    <strong>Controls:</strong> Arrow Keys or WASD to move<br>
+    The cube is confined within the room.
   </div>
   <!-- Include Three.js from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
@@ -30,11 +31,10 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // For isometric view, we use an OrthographicCamera
+    // Use an OrthographicCamera for isometric view
     const aspect = window.innerWidth / window.innerHeight;
     const d = 20;
     const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-    // Position the camera to mimic an isometric angle (diagonally above the scene)
     camera.position.set(30, 30, 30);
     camera.lookAt(scene.position);
 
@@ -52,7 +52,7 @@
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
-    // Walls (four walls to enclose the room)
+    // Walls (defining the room)
     const wallHeight = 10;
     const wallWidth = 50;
     const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xffaa00, side: THREE.DoubleSide });
@@ -86,35 +86,50 @@
     const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
     const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
     const player = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    // Position so that its bottom touches the floor
+    // Position so that its bottom touches the floor (cube height / 2)
     player.position.set(0, 1, 0);
     scene.add(player);
 
-    // Keyboard controls for moving the cube
+    // Keyboard controls with boundary checks
     document.addEventListener('keydown', function(event) {
       const speed = 1;
+      // Copy the current position
+      let newX = player.position.x;
+      let newZ = player.position.z;
+      
       switch (event.key) {
         case 'ArrowUp':
         case 'w':
         case 'W':
-          player.position.z -= speed;
+          newZ -= speed;
           break;
         case 'ArrowDown':
         case 's':
         case 'S':
-          player.position.z += speed;
+          newZ += speed;
           break;
         case 'ArrowLeft':
         case 'a':
         case 'A':
-          player.position.x -= speed;
+          newX -= speed;
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
-          player.position.x += speed;
+          newX += speed;
           break;
       }
+      
+      // Define room boundaries (considering cube's half-size, 1 unit)
+      const halfSize = 1;
+      const minX = -25 + halfSize;
+      const maxX = 25 - halfSize;
+      const minZ = -25 + halfSize;
+      const maxZ = 25 - halfSize;
+      
+      // Clamp the new positions to remain within the room
+      player.position.x = Math.min(maxX, Math.max(minX, newX));
+      player.position.z = Math.min(maxZ, Math.max(minZ, newZ));
     });
 
     // Handle window resizing

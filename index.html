@@ -8,16 +8,16 @@
   </style>
 </head>
 <body>
-  <!-- Include Three.js from a CDN -->
+  <!-- Include Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+    // Global variables
     let scene, camera, renderer;
     let boids = [];
     const NUM_BOIDS = 100;
-    // Define a closed cubic space (centered at 0,0,0)
-    const BOUNDS = 400;
-    const BOUNDS_HALF = BOUNDS / 2;
-    
+    const BOUNDS = 400;             // Closed space: cube of side 400
+    const BOUNDS_HALF = BOUNDS / 2;   // Half-dimensions: 200
+
     // Boid parameters
     const maxSpeed = 2;
     const maxForce = 0.05;
@@ -27,7 +27,7 @@
     // --- Boid Class Definition ---
     class Boid {
       constructor() {
-        // Start with a random position inside the cube
+        // Initialize with a random position inside the cube
         this.position = new THREE.Vector3(
           THREE.MathUtils.randFloatSpread(BOUNDS),
           THREE.MathUtils.randFloatSpread(BOUNDS),
@@ -41,12 +41,12 @@
         );
         this.acceleration = new THREE.Vector3();
         
-        // Create a pyramid shape using a ConeGeometry with 4 radial segments.
-        // Increase size slightly for visibility.
+        // Create a pyramid shape using ConeGeometry (which looks like a pyramid with 4 sides).
+        // Increase the size slightly for better visibility.
         const geometry = new THREE.ConeGeometry(4, 12, 4);
-        // By default, ConeGeometry points upward (along +Y). Rotate it so the tip points along +Z.
+        // By default, ConeGeometry points along +Y. Rotate it so the tip points along +Z.
         geometry.rotateX(Math.PI / 2);
-        // Use DoubleSide so the pyramid is visible from any angle.
+        // Use DoubleSide so the pyramid is visible from all angles.
         const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(this.position);
@@ -61,117 +61,9 @@
         this.acceleration.set(0, 0, 0);
         this.mesh.position.copy(this.position);
         
-        // Orient the pyramid so its tip points in the direction of velocity.
+        // Orient the pyramid so its tip points in the direction of motion
         this.mesh.lookAt(this.position.clone().add(this.velocity));
         
-        // Bounce off the walls of the closed cube.
-        if (this.position.x > BOUNDS_HALF) {
-          this.position.x = BOUNDS_HALF;
-          this.velocity.x *= -1;
-        }
-        if (this.position.x < -BOUNDS_HALF) {
-          this.position.x = -BOUNDS_HALF;
-          this.velocity.x *= -1;
-        }
-        if (this.position.y > BOUNDS_HALF) {
-          this.position.y = BOUNDS_HALF;
-          this.velocity.y *= -1;
-        }
-        if (this.position.y < -BOUNDS_HALF) {
-          this.position.y = -BOUNDS_HALF;
-          this.velocity.y *= -1;
-        }
-        if (this.position.z > BOUNDS_HALF) {
-          this.position.z = BOUNDS_HALF;
-          this.velocity.z *= -1;
-        }
-        if (this.position.z < -BOUNDS_HALF) {
-          this.position.z = -BOUNDS_HALF;
-          this.velocity.z *= -1;
-        }
-      }
-      
-      applyForce(force) {
-        this.acceleration.add(force);
-      }
-      
-      // Steer toward the average heading of local boids.
-      align(boids) {
-        const steering = new THREE.Vector3();
-        let total = 0;
-        for (const other of boids) {
-          const d = this.position.distanceTo(other.position);
-          if (other !== this && d < neighborhoodRadius) {
-            steering.add(other.velocity);
-            total++;
-          }
-        }
-        if (total > 0) {
-          steering.divideScalar(total);
-          steering.setLength(maxSpeed);
-          steering.sub(this.velocity);
-          steering.clampLength(0, maxForce);
-        }
-        return steering;
-      }
-      
-      // Steer toward the average position of local boids.
-      cohesion(boids) {
-        const steering = new THREE.Vector3();
-        let total = 0;
-        for (const other of boids) {
-          const d = this.position.distanceTo(other.position);
-          if (other !== this && d < neighborhoodRadius) {
-            steering.add(other.position);
-            total++;
-          }
-        }
-        if (total > 0) {
-          steering.divideScalar(total);
-          steering.sub(this.position);
-          steering.setLength(maxSpeed);
-          steering.sub(this.velocity);
-          steering.clampLength(0, maxForce);
-        }
-        return steering;
-      }
-      
-      // Steer to avoid crowding local boids.
-      separation(boids) {
-        const steering = new THREE.Vector3();
-        let total = 0;
-        for (const other of boids) {
-          const d = this.position.distanceTo(other.position);
-          if (other !== this && d < separationDistance) {
-            const diff = new THREE.Vector3().subVectors(this.position, other.position);
-            diff.divideScalar(d); // Weight by distance.
-            steering.add(diff);
-            total++;
-          }
-        }
-        if (total > 0) {
-          steering.divideScalar(total);
-          steering.setLength(maxSpeed);
-          steering.sub(this.velocity);
-          steering.clampLength(0, maxForce);
-        }
-        return steering;
-      }
-      
-      flock(boids) {
-        const alignment = this.align(boids);
-        const cohesion = this.cohesion(boids);
-        const separation = this.separation(boids);
-        
-        // Weight the forces as desired.
-        alignment.multiplyScalar(1.0);
-        cohesion.multiplyScalar(0.8);
-        separation.multiplyScalar(1.5);
-        
-        this.applyForce(alignment);
-        this.applyForce(cohesion);
-        this.applyForce(separation);
-      }
-    }
-
-    // Initialize and animate after the Boid cl
+        // Bounce off the walls of the cube
+        if (this.position.x > BOUNDS_HALF) { this.position.x = BOUNDS_HALF; this.velocity.x *= -1; }
+        if (this.position.x < -BOUNDS_HALF) { this.position.x = -BOUN

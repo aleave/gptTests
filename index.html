@@ -1,107 +1,226 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>3D Creature in Three.js</title>
-    <style>
-      body { margin: 0; overflow: hidden; }
-    </style>
-  </head>
-  <body>
-    <!-- Include Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-      let scene, camera, renderer, points, geometry, material;
-      let t = 0;
-      const GRID_SIZE = 200; // 200x200 grid => 40,000 points
-      const BASE_SIZE = 400;
+<head>
+  <meta charset="UTF-8">
+  <title>3D Boids with Pyramids in Three.js</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+  </style>
+</head>
+<body>
+  <!-- Include Three.js from a CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    let scene, camera, renderer;
+    let boids = [];
+    const NUM_BOIDS = 100;
+    // Define a closed cubic space (centered at 0,0,0)
+    const BOUNDS = 400;
+    const BOUNDS_HALF = BOUNDS / 2;
+    
+    // Boid parameters
+    const maxSpeed = 2;
+    const maxForce = 0.05;
+    const neighborhoodRadius = 50;
+    const separationDistance = 20;
 
-      init();
-      animate();
+    init();
+    animate();
 
-      function init() {
-        // Create scene and set background color
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
+    function init() {
+      // Set up scene and camera
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000000);
+      
+      camera = new THREE.PerspectiveCamera(
+        75, 
+        window.innerWidth / window.innerHeight, 
+        1, 
+        2000
+      );
+      camera.position.set(0, 0, 800);
+      camera.lookAt(0, 0, 0);
+      
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      
+      // Create boids
+      for (let i = 0; i < NUM_BOIDS; i++) {
+        const boid = new Boid();
+        boids.push(boid);
+        scene.add(boid.mesh);
+      }
+      
+      window.addEventListener('resize', onWindowResize, false);
+    }
 
-        // Create a perspective camera
-        camera = new THREE.PerspectiveCamera(
-          45,
-          window.innerWidth / window.innerHeight,
-          1,
-          2000
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // --- Boid Class Definition ---
+    class Boid {
+      constructor() {
+        // Start with a random position inside the cube
+        this.position = new THREE.Vector3(
+          THREE.MathUtils.randFloatSpread(BOUNDS),
+          THREE.MathUtils.randFloatSpread(BOUNDS),
+          THREE.MathUtils.randFloatSpread(BOUNDS)
         );
-        camera.position.set(0, 0, 800);
-        camera.lookAt(0, 0, 0);
-
-        // Create renderer and fill the window
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        // Create BufferGeometry for 40,000 points
-        const numPoints = GRID_SIZE * GRID_SIZE;
-        geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(numPoints * 3);
-        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-
-        // White points material; increase size if desired
-        material = new THREE.PointsMaterial({ color: 0xffffff, size: 2 });
-        points = new THREE.Points(geometry, material);
-        scene.add(points);
-
-        // Handle window resize
-        window.addEventListener("resize", onWindowResize, false);
+        // Random initial velocity
+        this.velocity = new THREE.Vector3(
+          THREE.MathUtils.randFloatSpread(2),
+          THREE.MathUtils.randFloatSpread(2),
+          THREE.MathUtils.randFloatSpread(2)
+        );
+        this.acceleration = new THREE.Vector3();
+        
+        // Create a pyramid shape using a ConeGeometry with 4 radial segments.
+        // By default, ConeGeometry points upward (along +Y). Rotate it so the tip points along +Z.
+        const geometry = new THREE.ConeGeometry(3, 8, 4);
+        geometry.rotateX(Math.PI / 2);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.position.copy(this.position);
       }
-
-      function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-
-      function animate() {
-        requestAnimationFrame(animate);
-        // Slow down the time progression for a more graceful motion
-        t += Math.PI / 240;
-        updatePoints();
-
-        // Rotate the scene slowly for a 3D effect
-        scene.rotation.y = t * 0.1;
-
-        renderer.render(scene, camera);
-      }
-
-      function updatePoints() {
-        const positions = geometry.attributes.position.array;
-        const count = positions.length / 3;
-        // Scale factor based on the window and base size
-        const scale = Math.min(window.innerWidth, window.innerHeight) / BASE_SIZE;
-
-        for (let i = 0; i < count; i++) {
-          // Grid coordinates
-          const xVal = i % GRID_SIZE;
-          const yVal = Math.floor(i / GRID_SIZE);
-
-          // Original intermediate computations:
-          const k = xVal / 8 - 12.5;
-          const e = Math.cos(k) + Math.sin(yVal / 24) + Math.cos(k / 2);
-          const d = Math.abs(e);
-          const q = xVal / 4 + 90 + d * k * (1 + Math.cos(d * 4 - t * 2 + yVal / 72));
-          const c = (yVal * e) / 594 - t / 8 + d / 6;
-
-          // Compute 3D coordinates:
-          const X = scale * (q * Math.cos(c));
-          const Y = scale * ((q / 2 + 99 * Math.cos(c / 2)) * Math.sin(c) + e * 6);
-          // New: compute a Z coordinate to add depth.
-          const Z = scale * (50 * Math.sin(d * 4 - t + xVal / 20));
-
-          positions[3 * i] = X;
-          positions[3 * i + 1] = Y;
-          positions[3 * i + 2] = Z;
+      
+      update() {
+        // Update velocity and position
+        this.velocity.add(this.acceleration);
+        this.velocity.clampLength(0, maxSpeed);
+        this.position.add(this.velocity);
+        // Reset acceleration for the next frame
+        this.acceleration.set(0, 0, 0);
+        this.mesh.position.copy(this.position);
+        
+        // Orient the pyramid so its tip points in the direction of velocity
+        this.mesh.lookAt(this.position.clone().add(this.velocity));
+        
+        // Bounce off the walls of the closed cube
+        if (this.position.x > BOUNDS_HALF) {
+          this.position.x = BOUNDS_HALF;
+          this.velocity.x *= -1;
         }
-        geometry.attributes.position.needsUpdate = true;
+        if (this.position.x < -BOUNDS_HALF) {
+          this.position.x = -BOUNDS_HALF;
+          this.velocity.x *= -1;
+        }
+        if (this.position.y > BOUNDS_HALF) {
+          this.position.y = BOUNDS_HALF;
+          this.velocity.y *= -1;
+        }
+        if (this.position.y < -BOUNDS_HALF) {
+          this.position.y = -BOUNDS_HALF;
+          this.velocity.y *= -1;
+        }
+        if (this.position.z > BOUNDS_HALF) {
+          this.position.z = BOUNDS_HALF;
+          this.velocity.z *= -1;
+        }
+        if (this.position.z < -BOUNDS_HALF) {
+          this.position.z = -BOUNDS_HALF;
+          this.velocity.z *= -1;
+        }
       }
-    </script>
-  </body>
+      
+      applyForce(force) {
+        this.acceleration.add(force);
+      }
+      
+      // Steer toward the average heading of local boids
+      align(boids) {
+        const steering = new THREE.Vector3();
+        let total = 0;
+        for (const other of boids) {
+          const d = this.position.distanceTo(other.position);
+          if (other !== this && d < neighborhoodRadius) {
+            steering.add(other.velocity);
+            total++;
+          }
+        }
+        if (total > 0) {
+          steering.divideScalar(total);
+          steering.setLength(maxSpeed);
+          steering.sub(this.velocity);
+          steering.clampLength(0, maxForce);
+        }
+        return steering;
+      }
+      
+      // Steer toward the average position of local boids
+      cohesion(boids) {
+        const steering = new THREE.Vector3();
+        let total = 0;
+        for (const other of boids) {
+          const d = this.position.distanceTo(other.position);
+          if (other !== this && d < neighborhoodRadius) {
+            steering.add(other.position);
+            total++;
+          }
+        }
+        if (total > 0) {
+          steering.divideScalar(total);
+          steering.sub(this.position);
+          steering.setLength(maxSpeed);
+          steering.sub(this.velocity);
+          steering.clampLength(0, maxForce);
+        }
+        return steering;
+      }
+      
+      // Steer to avoid crowding local boids
+      separation(boids) {
+        const steering = new THREE.Vector3();
+        let total = 0;
+        for (const other of boids) {
+          const d = this.position.distanceTo(other.position);
+          if (other !== this && d < separationDistance) {
+            const diff = new THREE.Vector3().subVectors(this.position, other.position);
+            diff.divideScalar(d); // Weight by distance
+            steering.add(diff);
+            total++;
+          }
+        }
+        if (total > 0) {
+          steering.divideScalar(total);
+          steering.setLength(maxSpeed);
+          steering.sub(this.velocity);
+          steering.clampLength(0, maxForce);
+        }
+        return steering;
+      }
+      
+      flock(boids) {
+        const alignment = this.align(boids);
+        const cohesion = this.cohesion(boids);
+        const separation = this.separation(boids);
+        
+        // Weight the forces as desired
+        alignment.multiplyScalar(1.0);
+        cohesion.multiplyScalar(0.8);
+        separation.multiplyScalar(1.5);
+        
+        this.applyForce(alignment);
+        this.applyForce(cohesion);
+        this.applyForce(separation);
+      }
+    }
+
+    // --- Animation Loop ---
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      // Update each boid's flocking behavior and movement
+      for (const boid of boids) {
+        boid.flock(boids);
+        boid.update();
+      }
+      
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
 </html>

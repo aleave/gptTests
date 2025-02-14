@@ -2,31 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Full Screen Three.js Creature</title>
+    <title>3D Creature in Three.js</title>
     <style>
       body { margin: 0; overflow: hidden; }
     </style>
   </head>
   <body>
-    <!-- Include Three.js from a CDN -->
+    <!-- Include Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
       let scene, camera, renderer, points, geometry, material;
       let t = 0;
       const GRID_SIZE = 200; // 200x200 grid => 40,000 points
+      const BASE_SIZE = 400;
 
       init();
       animate();
 
       function init() {
-        // Create the scene
+        // Create scene and set background color
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000);
 
-        // Create an orthographic camera so that (0,0) is at the center.
-        updateCamera();
+        // Create a perspective camera
+        camera = new THREE.PerspectiveCamera(
+          45,
+          window.innerWidth / window.innerHeight,
+          1,
+          2000
+        );
+        camera.position.set(0, 0, 800);
+        camera.lookAt(0, 0, 0);
 
-        // Create renderer that fills the window
+        // Create renderer and fill the window
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -35,59 +43,43 @@
         const numPoints = GRID_SIZE * GRID_SIZE;
         geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(numPoints * 3);
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
-        // White points material (you can adjust size if needed)
-        material = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
+        // White points material; increase size if desired
+        material = new THREE.PointsMaterial({ color: 0xffffff, size: 2 });
         points = new THREE.Points(geometry, material);
         scene.add(points);
 
         // Handle window resize
-        window.addEventListener('resize', onWindowResize, false);
-      }
-
-      // Create or update the orthographic camera.
-      function updateCamera() {
-        // We'll use a camera with the center at 0,0.
-        const aspect = window.innerWidth / window.innerHeight;
-        const frustumHeight = window.innerHeight;
-        const frustumWidth = window.innerWidth;
-        // Orthographic camera: left, right, top, bottom, near, far.
-        camera = new THREE.OrthographicCamera(
-          -frustumWidth / 2, 
-           frustumWidth / 2, 
-           frustumHeight / 2, 
-          -frustumHeight / 2, 
-          -1000, 
-           1000
-        );
-        camera.position.set(0, 0, 500);
-        camera.lookAt(0, 0, 0);
+        window.addEventListener("resize", onWindowResize, false);
       }
 
       function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-        updateCamera();
       }
 
       function animate() {
         requestAnimationFrame(animate);
-        // Increase time more slowly than before (was PI/60, now PI/240)
+        // Slow down the time progression for a more graceful motion
         t += Math.PI / 240;
         updatePoints();
+
+        // Rotate the scene slowly for a 3D effect
+        scene.rotation.y = t * 0.1;
+
         renderer.render(scene, camera);
       }
 
       function updatePoints() {
         const positions = geometry.attributes.position.array;
         const count = positions.length / 3;
+        // Scale factor based on the window and base size
+        const scale = Math.min(window.innerWidth, window.innerHeight) / BASE_SIZE;
 
-        // We center the creature at (0,0) and scale based on the window size.
-        // Here our base canvas is considered 400x400.
-        const scale = Math.min(window.innerWidth, window.innerHeight) / 400;
-
-        // Loop over our grid and compute positions
         for (let i = 0; i < count; i++) {
+          // Grid coordinates
           const xVal = i % GRID_SIZE;
           const yVal = Math.floor(i / GRID_SIZE);
 
@@ -98,11 +90,11 @@
           const q = xVal / 4 + 90 + d * k * (1 + Math.cos(d * 4 - t * 2 + yVal / 72));
           const c = (yVal * e) / 594 - t / 8 + d / 6;
 
-          // Re-map to (X, Y) positions using our scale factor.
-          // Instead of fixed offsets (200,200), the creature is centered at (0,0).
+          // Compute 3D coordinates:
           const X = scale * (q * Math.cos(c));
           const Y = scale * ((q / 2 + 99 * Math.cos(c / 2)) * Math.sin(c) + e * 6);
-          const Z = 0;
+          // New: compute a Z coordinate to add depth.
+          const Z = scale * (50 * Math.sin(d * 4 - t + xVal / 20));
 
           positions[3 * i] = X;
           positions[3 * i + 1] = Y;

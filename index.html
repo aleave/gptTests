@@ -274,6 +274,11 @@
       uniform sampler2D uTarget;
       uniform vec2 point;
       uniform float radius;
+      uniform float aspectRatio;
+      uniform vec3 color;
+      void main () {
+        vec2 diff = vUv - point;
+        diff.x *= aspectRatio;
       uniform vec3 color;
       void main () {
         vec2 diff = vUv - point;
@@ -563,6 +568,7 @@
       gl.uniform1i(splatProgram.uniforms.uTarget, bindTexture(0, velocity.read.texture));
       gl.uniform2f(splatProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
       gl.uniform1f(splatProgram.uniforms.radius, config.SPLAT_RADIUS);
+      gl.uniform1f(splatProgram.uniforms.aspectRatio, velocity.read.width / velocity.read.height);
       gl.uniform2f(splatProgram.uniforms.point, x, y);
       gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0.0);
       blit(velocity.write);
@@ -571,6 +577,7 @@
       gl.viewport(0, 0, density.read.width, density.read.height);
       gl.uniform1i(splatProgram.uniforms.uTarget, bindTexture(0, density.read.texture));
       gl.uniform2f(splatProgram.uniforms.texelSize, 1.0 / density.read.width, 1.0 / density.read.height);
+      gl.uniform1f(splatProgram.uniforms.aspectRatio, density.read.width / density.read.height);
       gl.uniform3f(splatProgram.uniforms.color, color[0], color[1], color[2]);
       blit(density.write);
       density.swap();

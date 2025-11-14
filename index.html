@@ -279,6 +279,10 @@
       void main () {
         vec2 diff = vUv - point;
         diff.x *= aspectRatio;
+      uniform vec3 color;
+      void main () {
+        vec2 diff = vUv - point;
+        diff.x *= gl.drawingBufferWidth / gl.drawingBufferHeight;
         float dist = dot(diff, diff);
         float influence = exp(-dist / radius);
         vec3 base = texture(uTarget, vUv).rgb;

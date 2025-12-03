@@ -1,711 +1,981 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Relaxing Fluid Simulation</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      height: 100%;
-      background: radial-gradient(circle at center, #060b2c 0%, #01020a 100%);
-      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      color: rgba(255, 255, 255, 0.8);
-    }
+    <meta charset="UTF-8">
+    <!-- Updated viewport with viewport-fit=cover for full screen iOS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Terminal Velocity</title>
+    
+    <!-- PWA / iOS Configuration -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- "black-translucent" lets the game render BEHIND the status bar text -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Terminal">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="manifest" href="manifest.json">
 
-    #ui {
-      position: fixed;
-      top: 24px;
-      left: 24px;
-      z-index: 10;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px 16px;
-      border-radius: 12px;
-      backdrop-filter: blur(12px) saturate(150%);
-      background: rgba(14, 24, 44, 0.55);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
-    }
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;600&display=swap');
 
-    #ui h1 {
-      font-size: 16px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin: 0 0 4px;
-    }
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505; /* Deep obsidian */
+            font-family: 'Inter', sans-serif;
+            color: #e5e5e5;
+            
+            /* Mobile interaction locks */
+            touch-action: none; 
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-    #ui span {
-      font-size: 12px;
-      opacity: 0.75;
-    }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            /* Ensures canvas covers the screen including safe areas */
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
 
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-    }
-  </style>
+        .ui-layer {
+            position: absolute;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 20; /* Above canvas and effects */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .hud {
+            position: absolute;
+            /* ADAPTIVE NOTCH SPACING: Adds 2rem to whatever the device notch size is */
+            top: calc(2rem + env(safe-area-inset-top)); 
+            left: calc(2rem + env(safe-area-inset-left));
+            
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 0.85rem;
+            color: #888;
+            z-index: 30;
+        }
+
+        .hud span {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .modal {
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px); /* Safari support */
+            padding: 2.5rem 4rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            pointer-events: auto;
+            
+            /* Ensure modal respects max width on mobile */
+            max-width: 90%;
+            box-sizing: border-box;
+        }
+
+        .modal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        h1 {
+            font-weight: 300;
+            font-size: 2.5rem;
+            letter-spacing: -0.05em;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #fff, #999);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.sub {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            font-weight: 300;
+        }
+
+        /* Instructions Grid */
+        .controls-guide {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .key-icon {
+            border: 1px solid #444;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            color: #ccc;
+            margin-right: 0.5rem;
+            font-family: monospace;
+        }
+
+        /* Pulsing Start Prompt */
+        .start-prompt {
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: #fff;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        button.btn-primary {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 0.8rem 2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            /* Better touch target size */
+            min-height: 44px;
+        }
+
+        button.btn-primary:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        /* Scanline effect */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        /* Vignette */
+        .vignette {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 40%, #000 120%);
+            pointer-events: none;
+            z-index: 9;
+        }
+    </style>
 </head>
 <body>
-  <div id="ui">
-    <h1>Chromatic Drift</h1>
-    <span>Move the pointer or just watch the colors mingle.</span>
-  </div>
-  <canvas id="fluid"></canvas>
-  <script>
-    // WebGL Fluid Simulation by Pavel Dobryakov (MIT License)
-    // Adapted with gentle defaults, automatic dye emitters, and relaxed visuals.
 
-    const canvas = document.getElementById('fluid');
-    const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true });
-    if (!gl) {
-      alert('WebGL 2 is required but not supported by your browser.');
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="vignette"></div>
+    <div class="scanlines"></div>
+
+    <div class="hud">
+        Depth: <span id="scoreDisplay">0</span>m
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="ui-layer">
+        <div class="modal active">
+            <h1>TERMINAL VELOCITY</h1>
+            <p class="sub">Inertial Descent Simulation</p>
+            
+            <div class="controls-guide">
+                <div>
+                    <span class="key-icon">←</span> LEFT
+                </div>
+                <div>
+                    <span class="key-icon">→</span> RIGHT
+                </div>
+            </div>
+
+            <div class="start-prompt">
+                PRESS SPACEBAR TO START
+            </div>
+            <p class="text-[10px] text-gray-600 mt-2">(Tap screen on mobile)</p>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="ui-layer" style="display: none;">
+        <div class="modal active">
+            <h1 style="color: #ff4444; -webkit-text-fill-color: #ff4444;">IMPACT DETECTED</h1>
+            <p class="sub">Depth Reached: <span id="finalScore" class="text-white font-bold">0</span>m</p>
+            <button class="btn-primary" onclick="game.reset()">RETRY</button>
+            <p class="text-xs text-gray-500 mt-4">or press Spacebar</p>
+        </div>
+    </div>
+
+<script>
+/**
+ * Vector2 Utility for physics calculations
+ */
+class Vector2 {
+    constructor(x, y) { this.x = x; this.y = y; }
+    add(v) { this.x += v.x; this.y += v.y; return this; }
+    mult(s) { this.x *= s; this.y *= s; return this; }
+    clone() { return new Vector2(this.x, this.y); }
+}
+
+/**
+ * Game Configuration
+ */
+const CONFIG = {
+    SEGMENT_HEIGHT: 15,    // Height of each tunnel slice
+    VIEW_DISTANCE: 80,     // How many segments visible
+    BASE_SPEED: 6,         // Start speed (per frame at 60fps)
+    MAX_SPEED: 12,         // Terminal velocity cap
+    SPEED_INC: 0.0003,     // Gradual acceleration
+    PLAYER_SIZE: 6,        // Radius
+    FRICTION: 0.92,        // Air resistance for lateral movement
+    ACCEL: 1.2,            // Lateral thruster power
+    WALL_COLOR: '#1a1a1a', // Dark grey walls
+    PATH_COLOR: '#0a0a0a', // Darker void
+    ACCENT_COLOR: '#ffffff'// Player glow
+};
+
+/**
+ * Procedural Audio Engine
+ * Generates dark synthwave and physics-based wind effects in real-time.
+ */
+class SoundManager {
+    constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.oscillators = [];
+        this.windNode = null;
+        this.windGain = null;
+        this.nextNoteTime = 0;
+        this.sequenceIndex = 0;
+        this.isPlaying = false;
+        
+        // A Minor Arpeggio sequence (frequencies)
+        this.sequence = [110.00, 130.81, 164.81, 196.00, 164.81, 130.81]; // A2, C3, E3, G3...
+        this.tempo = 0.15; // Seconds per note
     }
 
-    const config = {
-      SIM_RESOLUTION: 128,
-      DYE_RESOLUTION: 512,
-      DENSITY_DISSIPATION: 0.985,
-      VELOCITY_DISSIPATION: 0.99,
-      PRESSURE_ITERATIONS: 20,
-      CURL: 35,
-      SPLAT_RADIUS: 0.25,
-      SPLAT_FORCE: 6000,
-    };
-
-    let pointers = [];
-    let splatStack = [];
-    let lastTime = performance.now();
-
-    class Pointer {
-      constructor() {
-        this.id = -1;
-        this.texcoordX = 0;
-        this.texcoordY = 0;
-        this.prevTexcoordX = 0;
-        this.prevTexcoordY = 0;
-        this.deltaX = 0;
-        this.deltaY = 0;
-        this.down = false;
-        this.moved = false;
-        this.color = [30, 0, 300];
-      }
+    init() {
+        if (this.ctx) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0.4; // Master volume
+        this.masterGain.connect(this.ctx.destination);
     }
 
-    pointers.push(new Pointer());
-
-    function scaleByPixelRatio(input) {
-      const pixelRatio = window.devicePixelRatio || 1;
-      return Math.floor(input * pixelRatio);
-    }
-
-    function normalizeColor(input) {
-      const output = new Float32Array(3);
-      output[0] = input[0] / 255;
-      output[1] = input[1] / 255;
-      output[2] = input[2] / 255;
-      return output;
-    }
-
-    function getResolution(resolution) {
-      let aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
-      if (aspect < 1) aspect = 1 / aspect;
-      const min = Math.round(resolution);
-      const max = Math.round(resolution * aspect);
-      if (gl.drawingBufferWidth > gl.drawingBufferHeight) return { width: max, height: min };
-      return { width: min, height: max };
-    }
-
-    class GLProgram {
-      constructor(vertexShader, fragmentShader) {
-        this.uniforms = {};
-        this.program = gl.createProgram();
-        gl.attachShader(this.program, vertexShader);
-        gl.attachShader(this.program, fragmentShader);
-        gl.linkProgram(this.program);
-        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS))
-          throw gl.getProgramInfoLog(this.program);
-        const uniformCount = gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS);
-        for (let i = 0; i < uniformCount; i++) {
-          const uniformName = gl.getActiveUniform(this.program, i).name;
-          this.uniforms[uniformName] = gl.getUniformLocation(this.program, uniformName);
+    createNoiseBuffer() {
+        const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
         }
-      }
-
-      bind() {
-        gl.useProgram(this.program);
-      }
+        return buffer;
     }
 
-    class FBO {
-      constructor(read, write) {
-        this.read = read;
-        this.write = write;
-      }
+    startWind() {
+        if (!this.ctx) return;
+        // Pink noise approximation for wind
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer();
+        noise.loop = true;
 
-      swap() {
-        const tmp = this.read;
-        this.read = this.write;
-        this.write = tmp;
-      }
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 200;
+
+        this.windGain = this.ctx.createGain();
+        this.windGain.gain.value = 0;
+
+        noise.connect(filter);
+        filter.connect(this.windGain);
+        this.windGain.connect(this.masterGain);
+        
+        noise.start();
+        this.windNode = { source: noise, filter: filter };
     }
 
-    function createFBO(texId, width, height, internalFormat, format, type, param) {
-      gl.activeTexture(gl.TEXTURE0 + texId);
-      const texture = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, param);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, param);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, null);
-
-      const fbo = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-      gl.viewport(0, 0, width, height);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
-      return { texture, fbo, width, height, texId };
+    updateWind(speedRatio) {
+        // speedRatio is 0.0 to 1.0 (based on max speed)
+        if (!this.windNode) return;
+        
+        // Wind pitch (cutoff) increases with speed
+        const targetFreq = 200 + (speedRatio * 800); 
+        this.windNode.filter.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.1);
+        
+        // Wind volume increases with speed
+        const targetVol = 0.1 + (speedRatio * 0.4);
+        this.windGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.1);
     }
 
-    function createDoubleFBO(texId, width, height, internalFormat, format, type, param) {
-      const fbo1 = createFBO(texId, width, height, internalFormat, format, type, param);
-      const fbo2 = createFBO(texId + 1, width, height, internalFormat, format, type, param);
-      return new FBO(fbo1, fbo2);
+    startMusic() {
+        if (!this.ctx) this.init();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        
+        this.stopMusic(); // Clear existing
+        this.isPlaying = true;
+        this.startWind();
+
+        const t = this.ctx.currentTime;
+
+        // 1. The Drone (Deep Sawtooth Pad)
+        const droneOsc1 = this.ctx.createOscillator();
+        const droneOsc2 = this.ctx.createOscillator();
+        const droneFilter = this.ctx.createBiquadFilter();
+        const droneGain = this.ctx.createGain();
+
+        droneOsc1.type = 'sawtooth';
+        droneOsc1.frequency.value = 55.00; // A1
+        droneOsc2.type = 'sawtooth';
+        droneOsc2.frequency.value = 55.50; // Detuned slightly
+        
+        droneFilter.type = 'lowpass';
+        droneFilter.frequency.value = 600;
+        droneFilter.Q.value = 1;
+
+        droneGain.gain.value = 0.3;
+
+        droneOsc1.connect(droneFilter);
+        droneOsc2.connect(droneFilter);
+        droneFilter.connect(droneGain);
+        droneGain.connect(this.masterGain);
+
+        droneOsc1.start(t);
+        droneOsc2.start(t);
+        
+        this.oscillators.push(droneOsc1, droneOsc2);
+
+        // Start Sequencer
+        this.nextNoteTime = t;
+        this.scheduler();
     }
 
-    function compileShader(type, source) {
-      const shader = gl.createShader(type);
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error(gl.getShaderInfoLog(shader));
-      }
-      return shader;
-    }
-
-    function bindTexture(unit, texture) {
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      return unit;
-    }
-
-    const baseVertexShader = compileShader(
-      gl.VERTEX_SHADER,
-      `#version 300 es
-      precision highp float;
-      layout (location = 0) in vec2 aPosition;
-      out vec2 vUv;
-      out vec2 vL;
-      out vec2 vR;
-      out vec2 vT;
-      out vec2 vB;
-      uniform vec2 texelSize;
-      void main () {
-        vUv = aPosition * 0.5 + 0.5;
-        vL = vUv - vec2(texelSize.x, 0.0);
-        vR = vUv + vec2(texelSize.x, 0.0);
-        vT = vUv + vec2(0.0, texelSize.y);
-        vB = vUv - vec2(0.0, texelSize.y);
-        gl_Position = vec4(aPosition, 0.0, 1.0);
-      }`
-    );
-
-    const blurVertexShader = compileShader(
-      gl.VERTEX_SHADER,
-      `#version 300 es
-      precision highp float;
-      layout (location = 0) in vec2 aPosition;
-      out vec2 vUv;
-      void main () {
-        vUv = aPosition * 0.5 + 0.5;
-        gl_Position = vec4(aPosition, 0.0, 1.0);
-      }`
-    );
-
-    const copyShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision mediump float;
-      in vec2 vUv;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uTexture;
-      void main () {
-        fragColor = texture(uTexture, vUv);
-      }`
-    );
-
-    const clearShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision mediump float;
-      in vec2 vUv;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uTexture;
-      uniform float value;
-      void main () {
-        fragColor = texture(uTexture, vUv) * value;
-      }`
-    );
-
-    const displayShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision mediump float;
-      in vec2 vUv;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uTexture;
-      void main () {
-        vec3 C = texture(uTexture, vUv).rgb;
-        fragColor = vec4(C, 1.0);
-      }`
-    );
-
-    const splatShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vUv;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uTarget;
-      uniform vec2 point;
-      uniform float radius;
-      uniform vec3 color;
-      void main () {
-        vec2 diff = vUv - point;
-        diff.x *= gl.drawingBufferWidth / gl.drawingBufferHeight;
-        float dist = dot(diff, diff);
-        float influence = exp(-dist / radius);
-        vec3 base = texture(uTarget, vUv).rgb;
-        fragColor = vec4(base + color * influence, 1.0);
-      }`
-    );
-
-    const advectionShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vUv;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uVelocity;
-      uniform sampler2D uSource;
-      uniform vec2 texelSize;
-      uniform float dt;
-      uniform float dissipation;
-      void main () {
-        vec2 coord = vUv - dt * texture(uVelocity, vUv).xy * texelSize;
-        fragColor = dissipation * texture(uSource, coord);
-      }`
-    );
-
-    const divergenceShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vUv;
-      in vec2 vL;
-      in vec2 vR;
-      in vec2 vT;
-      in vec2 vB;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uVelocity;
-      void main () {
-        float L = texture(uVelocity, vL).x;
-        float R = texture(uVelocity, vR).x;
-        float T = texture(uVelocity, vT).y;
-        float B = texture(uVelocity, vB).y;
-        float div = 0.5 * (R - L + T - B);
-        fragColor = vec4(div, 0.0, 0.0, 1.0);
-      }`
-    );
-
-    const curlShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vT;
-      in vec2 vB;
-      in vec2 vL;
-      in vec2 vR;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uVelocity;
-      void main () {
-        float T = texture(uVelocity, vT).x;
-        float B = texture(uVelocity, vB).x;
-        float R = texture(uVelocity, vR).y;
-        float L = texture(uVelocity, vL).y;
-        float vorticity = R - L - T + B;
-        fragColor = vec4(vorticity, 0.0, 0.0, 1.0);
-      }`
-    );
-
-    const vorticityShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vUv;
-      in vec2 vL;
-      in vec2 vR;
-      in vec2 vT;
-      in vec2 vB;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uVelocity;
-      uniform sampler2D uCurl;
-      uniform float curl;
-      uniform float dt;
-      void main () {
-        float L = texture(uCurl, vL).x;
-        float R = texture(uCurl, vR).x;
-        float T = texture(uCurl, vT).x;
-        float B = texture(uCurl, vB).x;
-        float C = texture(uCurl, vUv).x;
-        vec2 force = 0.5 * vec2(abs(T) - abs(B), abs(R) - abs(L));
-        force /= length(force) + 0.0001;
-        force *= curl * C;
-        vec2 vel = texture(uVelocity, vUv).xy;
-        fragColor = vec4(vel + force * dt, 0.0, 1.0);
-      }`
-    );
-
-    const pressureShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vUv;
-      in vec2 vL;
-      in vec2 vR;
-      in vec2 vT;
-      in vec2 vB;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uPressure;
-      uniform sampler2D uDivergence;
-      void main () {
-        float L = texture(uPressure, vL).x;
-        float R = texture(uPressure, vR).x;
-        float T = texture(uPressure, vT).x;
-        float B = texture(uPressure, vB).x;
-        float divergence = texture(uDivergence, vUv).x;
-        float pressure = (L + R + T + B - divergence) * 0.25;
-        fragColor = vec4(pressure, 0.0, 0.0, 1.0);
-      }`
-    );
-
-    const gradientSubtractShader = compileShader(
-      gl.FRAGMENT_SHADER,
-      `#version 300 es
-      precision highp float;
-      in vec2 vUv;
-      in vec2 vL;
-      in vec2 vR;
-      in vec2 vT;
-      in vec2 vB;
-      layout (location = 0) out vec4 fragColor;
-      uniform sampler2D uPressure;
-      uniform sampler2D uVelocity;
-      void main () {
-        float L = texture(uPressure, vL).x;
-        float R = texture(uPressure, vR).x;
-        float T = texture(uPressure, vT).x;
-        float B = texture(uPressure, vB).x;
-        vec2 velocity = texture(uVelocity, vUv).xy;
-        velocity.xy -= vec2(R - L, T - B);
-        fragColor = vec4(velocity, 0.0, 1.0);
-      }`
-    );
-
-    let velocity, density, divergence, curl, pressure;
-    let clearProgram, displayProgram, splatProgram, advectionProgram, divergenceProgram, curlProgram, vorticityProgram, pressureProgram, gradProgram;
-
-    function initFramebuffers() {
-      const simRes = getResolution(config.SIM_RESOLUTION);
-      const dyeRes = getResolution(config.DYE_RESOLUTION);
-      const texType = gl.HALF_FLOAT;
-      const format = gl.RGBA16F;
-      const internalFormat = gl.RGBA;
-      const filtering = gl.LINEAR;
-
-      velocity = createDoubleFBO(0, simRes.width, simRes.height, format, internalFormat, texType, filtering);
-      density = createDoubleFBO(2, dyeRes.width, dyeRes.height, format, internalFormat, texType, filtering);
-      divergence = createFBO(4, simRes.width, simRes.height, format, internalFormat, texType, gl.NEAREST);
-      curl = createFBO(5, simRes.width, simRes.height, format, internalFormat, texType, gl.NEAREST);
-      pressure = createDoubleFBO(6, simRes.width, simRes.height, format, internalFormat, texType, gl.NEAREST);
-    }
-
-    function initPrograms() {
-      clearProgram = new GLProgram(baseVertexShader, clearShader);
-      displayProgram = new GLProgram(blurVertexShader, displayShader);
-      splatProgram = new GLProgram(baseVertexShader, splatShader);
-      advectionProgram = new GLProgram(baseVertexShader, advectionShader);
-      divergenceProgram = new GLProgram(baseVertexShader, divergenceShader);
-      curlProgram = new GLProgram(baseVertexShader, curlShader);
-      vorticityProgram = new GLProgram(baseVertexShader, vorticityShader);
-      pressureProgram = new GLProgram(baseVertexShader, pressureShader);
-      gradProgram = new GLProgram(baseVertexShader, gradientSubtractShader);
-    }
-
-    function updateCanvasSize() {
-      const width = scaleByPixelRatio(window.innerWidth);
-      const height = scaleByPixelRatio(window.innerHeight);
-      canvas.width = width;
-      canvas.height = height;
-      gl.viewport(0, 0, width, height);
-    }
-
-    const blit = (() => {
-      const quadVAO = gl.createVertexArray();
-      gl.bindVertexArray(quadVAO);
-      const vbo = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(0);
-      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      const ibo = gl.createBuffer();
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 2, 1, 3]), gl.STATIC_DRAW);
-
-      return destination => {
-        gl.bindVertexArray(quadVAO);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, destination ? destination.fbo : destination);
-        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-      };
-    })();
-
-    function update() {
-      const now = performance.now();
-      let dt = (now - lastTime) / 1000;
-      lastTime = now;
-      dt = Math.min(dt, 0.016);
-
-      if (splatStack.length > 0) multipleSplats(splatStack.pop());
-
-      gl.viewport(0, 0, velocity.read.width, velocity.read.height);
-
-      curlProgram.bind();
-      gl.uniform2f(curlProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1i(curlProgram.uniforms.uVelocity, bindTexture(0, velocity.read.texture));
-      blit(curl);
-
-      vorticityProgram.bind();
-      gl.uniform2f(vorticityProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1i(vorticityProgram.uniforms.uVelocity, bindTexture(0, velocity.read.texture));
-      gl.uniform1i(vorticityProgram.uniforms.uCurl, bindTexture(1, curl.texture));
-      gl.uniform1f(vorticityProgram.uniforms.curl, config.CURL);
-      gl.uniform1f(vorticityProgram.uniforms.dt, dt);
-      blit(velocity.write);
-      velocity.swap();
-
-      divergenceProgram.bind();
-      gl.uniform2f(divergenceProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1i(divergenceProgram.uniforms.uVelocity, bindTexture(0, velocity.read.texture));
-      blit(divergence);
-
-      clearProgram.bind();
-      gl.uniform2f(clearProgram.uniforms.texelSize, 1.0 / pressure.read.width, 1.0 / pressure.read.height);
-      gl.uniform1i(clearProgram.uniforms.uTexture, bindTexture(0, pressure.read.texture));
-      gl.uniform1f(clearProgram.uniforms.value, 0.8);
-      blit(pressure.write);
-      pressure.swap();
-
-      pressureProgram.bind();
-      gl.uniform2f(pressureProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1i(pressureProgram.uniforms.uDivergence, bindTexture(0, divergence.texture));
-      for (let i = 0; i < config.PRESSURE_ITERATIONS; i++) {
-        gl.uniform1i(pressureProgram.uniforms.uPressure, bindTexture(1, pressure.read.texture));
-        blit(pressure.write);
-        pressure.swap();
-      }
-
-      gradProgram.bind();
-      gl.uniform2f(gradProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1i(gradProgram.uniforms.uPressure, bindTexture(0, pressure.read.texture));
-      gl.uniform1i(gradProgram.uniforms.uVelocity, bindTexture(1, velocity.read.texture));
-      blit(velocity.write);
-      velocity.swap();
-
-      advectionProgram.bind();
-      gl.uniform2f(advectionProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1i(advectionProgram.uniforms.uVelocity, bindTexture(0, velocity.read.texture));
-      gl.uniform1i(advectionProgram.uniforms.uSource, bindTexture(1, velocity.read.texture));
-      gl.uniform1f(advectionProgram.uniforms.dt, dt);
-      gl.uniform1f(advectionProgram.uniforms.dissipation, config.VELOCITY_DISSIPATION);
-      blit(velocity.write);
-      velocity.swap();
-
-      gl.viewport(0, 0, density.read.width, density.read.height);
-
-      advectionProgram.bind();
-      gl.uniform2f(advectionProgram.uniforms.texelSize, 1.0 / density.read.width, 1.0 / density.read.height);
-      gl.uniform1i(advectionProgram.uniforms.uVelocity, bindTexture(0, velocity.read.texture));
-      gl.uniform1i(advectionProgram.uniforms.uSource, bindTexture(1, density.read.texture));
-      gl.uniform1f(advectionProgram.uniforms.dt, dt);
-      gl.uniform1f(advectionProgram.uniforms.dissipation, config.DENSITY_DISSIPATION);
-      blit(density.write);
-      density.swap();
-
-      render();
-      requestAnimationFrame(update);
-    }
-
-    function render() {
-      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      displayProgram.bind();
-      gl.uniform1i(displayProgram.uniforms.uTexture, bindTexture(0, density.read.texture));
-      blit(null);
-    }
-
-    function splat(x, y, dx, dy, color) {
-      gl.viewport(0, 0, velocity.read.width, velocity.read.height);
-      splatProgram.bind();
-      gl.uniform1i(splatProgram.uniforms.uTarget, bindTexture(0, velocity.read.texture));
-      gl.uniform2f(splatProgram.uniforms.texelSize, 1.0 / velocity.read.width, 1.0 / velocity.read.height);
-      gl.uniform1f(splatProgram.uniforms.radius, config.SPLAT_RADIUS);
-      gl.uniform2f(splatProgram.uniforms.point, x, y);
-      gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0.0);
-      blit(velocity.write);
-      velocity.swap();
-
-      gl.viewport(0, 0, density.read.width, density.read.height);
-      gl.uniform1i(splatProgram.uniforms.uTarget, bindTexture(0, density.read.texture));
-      gl.uniform2f(splatProgram.uniforms.texelSize, 1.0 / density.read.width, 1.0 / density.read.height);
-      gl.uniform3f(splatProgram.uniforms.color, color[0], color[1], color[2]);
-      blit(density.write);
-      density.swap();
-    }
-
-    function multipleSplats(amount) {
-      const pointer = pointers[0];
-      for (let i = 0; i < amount; i++) {
-        const color = normalizeColor([Math.random() * 255, Math.random() * 255, Math.random() * 255]);
-        pointer.deltaX = Math.random() * 2 - 1;
-        pointer.deltaY = Math.random() * 2 - 1;
-        pointer.texcoordX = Math.random();
-        pointer.texcoordY = Math.random();
-        splat(pointer.texcoordX, pointer.texcoordY, pointer.deltaX * config.SPLAT_FORCE, pointer.deltaY * config.SPLAT_FORCE, color);
-      }
-    }
-
-    function initEvents() {
-      window.addEventListener('resize', () => {
-        updateCanvasSize();
-        initFramebuffers();
-      });
-
-      canvas.addEventListener('mousedown', e => {
-        const pointer = pointers[0];
-        pointer.down = true;
-        pointer.moved = false;
-        pointer.texcoordX = e.offsetX / canvas.clientWidth;
-        pointer.texcoordY = 1.0 - e.offsetY / canvas.clientHeight;
-        pointer.prevTexcoordX = pointer.texcoordX;
-        pointer.prevTexcoordY = pointer.texcoordY;
-      });
-
-      window.addEventListener('mousemove', e => {
-        const pointer = pointers[0];
-        if (!pointer.down) return;
-        const rect = canvas.getBoundingClientRect();
-        pointer.texcoordX = (e.clientX - rect.left) / rect.width;
-        pointer.texcoordY = 1.0 - (e.clientY - rect.top) / rect.height;
-        pointer.deltaX = pointer.texcoordX - pointer.prevTexcoordX;
-        pointer.deltaY = pointer.texcoordY - pointer.prevTexcoordY;
-        pointer.prevTexcoordX = pointer.texcoordX;
-        pointer.prevTexcoordY = pointer.texcoordY;
-        const color = normalizeColor([
-          170 + Math.sin(performance.now() * 0.0006) * 80,
-          130 + Math.cos(performance.now() * 0.0009) * 90,
-          255
-        ]);
-        splat(pointer.texcoordX, pointer.texcoordY, pointer.deltaX * config.SPLAT_FORCE, pointer.deltaY * config.SPLAT_FORCE, color);
-        pointer.moved = true;
-      });
-
-      window.addEventListener('mouseup', () => {
-        pointers[0].down = false;
-      });
-
-      canvas.addEventListener('touchstart', e => {
-        e.preventDefault();
-        while (pointers.length < e.touches.length) pointers.push(new Pointer());
-        for (let i = 0; i < e.touches.length; i++) {
-          const touch = e.touches[i];
-          const pointer = pointers[i];
-          pointer.id = touch.identifier;
-          pointer.down = true;
-          pointer.moved = false;
-          const rect = canvas.getBoundingClientRect();
-          pointer.texcoordX = (touch.clientX - rect.left) / rect.width;
-          pointer.texcoordY = 1.0 - (touch.clientY - rect.top) / rect.height;
-          pointer.prevTexcoordX = pointer.texcoordX;
-          pointer.prevTexcoordY = pointer.texcoordY;
-          pointer.color = normalizeColor([
-            150 + Math.random() * 100,
-            100 + Math.random() * 120,
-            200 + Math.random() * 55
-          ]);
+    scheduler() {
+        if (!this.isPlaying) return;
+        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+            this.playNote(this.nextNoteTime);
+            this.nextNoteTime += this.tempo;
         }
-      }, { passive: false });
+        requestAnimationFrame(this.scheduler.bind(this));
+    }
 
-      canvas.addEventListener('touchmove', e => {
-        e.preventDefault();
-        for (let i = 0; i < e.touches.length; i++) {
-          const touch = e.touches[i];
-          const pointer = pointers[i];
-          const rect = canvas.getBoundingClientRect();
-          pointer.texcoordX = (touch.clientX - rect.left) / rect.width;
-          pointer.texcoordY = 1.0 - (touch.clientY - rect.top) / rect.height;
-          pointer.deltaX = pointer.texcoordX - pointer.prevTexcoordX;
-          pointer.deltaY = pointer.texcoordY - pointer.prevTexcoordY;
-          pointer.prevTexcoordX = pointer.texcoordX;
-          pointer.prevTexcoordY = pointer.texcoordY;
-          splat(pointer.texcoordX, pointer.texcoordY, pointer.deltaX * config.SPLAT_FORCE, pointer.deltaY * config.SPLAT_FORCE, pointer.color);
-          pointer.moved = true;
+    playNote(time) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'square';
+        osc.frequency.value = this.sequence[this.sequenceIndex];
+        
+        // Envelope
+        gain.gain.setValueAtTime(0.1, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc.start(time);
+        osc.stop(time + 0.15);
+
+        this.sequenceIndex = (this.sequenceIndex + 1) % this.sequence.length;
+    }
+
+    stopMusic() {
+        this.isPlaying = false;
+        this.oscillators.forEach(osc => {
+            try { osc.stop(); } catch(e){}
+        });
+        this.oscillators = [];
+        if (this.windNode) {
+            try { this.windNode.source.stop(); } catch(e){}
+            this.windNode = null;
         }
-      }, { passive: false });
+    }
 
-      window.addEventListener('touchend', e => {
-        const touches = e.changedTouches;
-        for (let i = 0; i < touches.length; i++) {
-          const pointer = pointers.find(p => p.id === touches[i].identifier);
-          if (!pointer) continue;
-          pointer.down = false;
+    playCrash() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+        
+        gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.6);
+    }
+    
+    // Landmark sound: Soft high-pitched "plop"
+    playPlop() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'sine';
+        // Pitch envelope: High to slightly lower
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + 0.1);
+        
+        // Volume envelope: Short blip
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+    }
+}
+
+class Particle {
+    constructor(x, y, speed, color) {
+        this.x = x;
+        this.y = y;
+        this.vy = -speed * (0.5 + Math.random()); // Move up (simulating falling down)
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.03;
+        this.color = color;
+        this.size = Math.random() * 2;
+    }
+
+    update(timeScale) {
+        this.y += this.vy * timeScale;
+        this.life -= this.decay * timeScale;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+class TunnelSystem {
+    constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.segments = [];
+        this.pathCenter = width / 2;
+        this.pathWidth = 450; 
+        this.targetCenter = width / 2;
+        this.noiseOffset = Math.random() * 1000; // Randomize start to prevent predictable rightward bias
+        this.segmentCount = 0;
+        this.lastObstacleDist = 0;
+        this.nextLandmark = 500; // First landmark at 500m
+        this.accumulatedDepth = 0;
+        
+        // Initialize segments to fill screen
+        for (let i = 0; i < CONFIG.VIEW_DISTANCE; i++) {
+            this.addSegment(i * CONFIG.SEGMENT_HEIGHT);
         }
-      });
     }
 
-    let lastAutoSplat = 0;
-    function autoSplats(timestamp) {
-      if (timestamp - lastAutoSplat > 2600) {
-        multipleSplats(Math.random() * 3 + 1);
-        lastAutoSplat = timestamp;
-      }
+    addSegment(yPosition) {
+        this.segmentCount++;
+        this.lastObstacleDist++;
+        this.accumulatedDepth += (CONFIG.SEGMENT_HEIGHT * 0.1); // Rough estimate for landmarks
+        
+        // Calculate Difficulty Factor (0.0 to 1.0)
+        // Reaches max difficulty at 3000 segments (approx 2 mins of survival)
+        const difficulty = Math.min(1, this.segmentCount / 3000);
+
+        // Dynamic Path Width: Narrows from 450 to 200
+        this.pathWidth = 450 - (difficulty * 250);
+
+        // Simple noise logic for winding path
+        this.noiseOffset += 0.05;
+        
+        // Drifting center
+        if (Math.random() < 0.05) {
+            this.targetCenter = (this.width * 0.2) + Math.random() * (this.width * 0.6);
+        }
+        
+        // Smoothly move center towards target
+        this.pathCenter += (this.targetCenter - this.pathCenter) * 0.05;
+        
+        // Add minimal sine wave for organic feel
+        const organicDrift = Math.sin(this.noiseOffset) * 20;
+        
+        // Landmark Logic (Approx every 500 depth units)
+        // We use segmentCount to keep it consistent
+        // Let's say 1 segment ~= 1 meter unit roughly in gameplay perception
+        // Or strictly use segment count. Every ~350 segments is roughly 500m on the scorecard
+        let isLandmark = false;
+        let landmarkLabel = "";
+        
+        // Every 350 segments, insert a landmark (tuning to match score speed roughly)
+        if (this.segmentCount % 350 === 0) {
+            isLandmark = true;
+            landmarkLabel = (this.segmentCount / 350 * 500) + "m";
+        }
+        
+        // Dynamic Obstacles Logic
+        let hasObstacle = false;
+        let obstacleType = 0; // 0: None, 1: Center Block, 2: Split
+        
+        // Dynamic Safety Gap: Reduces from 25 to 10
+        const minGap = 25 - (difficulty * 15);
+        
+        // Dynamic Spawn Chance: Increases from 5% to 18%
+        const spawnChance = 0.05 + (difficulty * 0.13);
+
+        if (this.segmentCount > 100 && this.lastObstacleDist > minGap && !isLandmark) {
+            if (Math.random() < spawnChance) {
+                hasObstacle = true;
+                obstacleType = Math.random() > 0.5 ? 1 : 2;
+                this.lastObstacleDist = 0; 
+            }
+        }
+
+        const segment = {
+            y: yPosition, 
+            center: this.pathCenter + organicDrift,
+            width: this.pathWidth,
+            obstacle: hasObstacle ? obstacleType : 0,
+            colorOffset: Math.random() * 20,
+            landmark: isLandmark,
+            landmarkLabel: landmarkLabel,
+            landmarkPlayed: false
+        };
+
+        this.segments.push(segment);
     }
 
-    function updateAutoSplats(timestamp) {
-      autoSplats(timestamp);
-      requestAnimationFrame(updateAutoSplats);
+    // UPDATED: Now accepts total movement amount (speed * timeScale) instead of raw speed
+    update(moveAmount) {
+        // Move all segments UP
+        this.segments.forEach(seg => {
+            seg.y -= moveAmount;
+        });
+
+        // Remove segments that went off top
+        if (this.segments[0].y < -CONFIG.SEGMENT_HEIGHT) {
+            this.segments.shift();
+        }
+
+        // Add new segments at bottom
+        const lastSeg = this.segments[this.segments.length - 1];
+        if (lastSeg.y < this.height + 100) { // Buffer
+            this.addSegment(lastSeg.y + CONFIG.SEGMENT_HEIGHT);
+        }
     }
 
-    function init() {
-      if (!gl) return;
-      const ext = gl.getExtension('EXT_color_buffer_float');
-      if (!ext) {
-        alert('Your browser does not support float color buffers needed for the simulation.');
-        return;
-      }
-      initPrograms();
-      updateCanvasSize();
-      initFramebuffers();
-      initEvents();
-      multipleSplats(Math.random() * 20 + 10);
-      requestAnimationFrame(update);
-      requestAnimationFrame(updateAutoSplats);
+    checkLandmarks(playerY, soundManager) {
+        // Check if any landmark segment has just passed the player
+        this.segments.forEach(seg => {
+            if (seg.landmark && !seg.landmarkPlayed) {
+                // If segment is within a small range of playerY (crossing it)
+                if (Math.abs(seg.y - playerY) < CONFIG.SEGMENT_HEIGHT) {
+                    soundManager.playPlop();
+                    seg.landmarkPlayed = true;
+                }
+            }
+        });
     }
 
-    init();
-  </script>
+    draw(ctx) {
+        ctx.lineWidth = 1;
+        
+        // Draw the walls (The inverse of the path)
+        for (let i = 0; i < this.segments.length - 1; i++) {
+            const curr = this.segments[i];
+            const next = this.segments[i+1];
+
+            // Calculate wall boundaries
+            const cLeft = curr.center - curr.width/2;
+            const cRight = curr.center + curr.width/2;
+            const nLeft = next.center - next.width/2;
+            const nRight = next.center + next.width/2;
+
+            // Gradient for depth perception
+            const gradient = ctx.createLinearGradient(0, curr.y, 0, next.y);
+            const darkness = Math.min(1, i / (CONFIG.VIEW_DISTANCE * 0.8)); // Fade out at bottom
+            const colorVal = Math.floor(20 + curr.colorOffset);
+            const col = `rgb(${colorVal}, ${colorVal}, ${colorVal + 10})`;
+            
+            ctx.fillStyle = col;
+            
+            // Left Wall
+            ctx.beginPath();
+            ctx.moveTo(0, curr.y);
+            ctx.lineTo(cLeft, curr.y);
+            ctx.lineTo(nLeft, next.y);
+            ctx.lineTo(0, next.y);
+            ctx.fill();
+
+            // Right Wall
+            ctx.beginPath();
+            ctx.moveTo(this.width, curr.y);
+            ctx.lineTo(cRight, curr.y);
+            ctx.lineTo(nRight, next.y);
+            ctx.lineTo(this.width, next.y);
+            ctx.fill();
+
+            // Draw Obstacles
+            if (curr.obstacle > 0) {
+                ctx.fillStyle = '#ff3333'; // Hazard color
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff0000';
+                
+                if (curr.obstacle === 1) {
+                    // Center Block
+                    const obsW = curr.width * 0.4;
+                    ctx.fillRect(curr.center - obsW/2, curr.y, obsW, CONFIG.SEGMENT_HEIGHT);
+                } else if (curr.obstacle === 2) {
+                    // Split (Side blocks)
+                    const obsW = curr.width * 0.25;
+                    ctx.fillRect(cLeft, curr.y, obsW, CONFIG.SEGMENT_HEIGHT);
+                    ctx.fillRect(cRight - obsW, curr.y, obsW, CONFIG.SEGMENT_HEIGHT);
+                }
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw Landmark Line
+            if (curr.landmark) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.setLineDash([10, 15]);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, curr.y);
+                ctx.lineTo(this.width, curr.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.lineWidth = 1;
+                
+                // Text
+                ctx.fillStyle = '#fff';
+                ctx.font = '600 14px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText("--- " + curr.landmarkLabel + " ---", curr.center, curr.y - 10);
+            }
+            
+            // Draw depth lines (grid effect on walls)
+            if (!curr.landmark) {
+                ctx.strokeStyle = '#222';
+                ctx.beginPath();
+                ctx.moveTo(cLeft, curr.y);
+                ctx.lineTo(cRight, curr.y);
+                ctx.stroke();
+            }
+        }
+    }
+    
+    // Check collision for a circle at x,y with radius r
+    checkCollision(x, y, r) {
+        // Find segment corresponding to y
+        const playerY = y;
+        
+        for (let seg of this.segments) {
+            if (playerY >= seg.y && playerY <= seg.y + CONFIG.SEGMENT_HEIGHT) {
+                const leftWall = seg.center - seg.width/2;
+                const rightWall = seg.center + seg.width/2;
+                
+                // Wall Collision
+                if (x - r < leftWall || x + r > rightWall) return true;
+                
+                // Obstacle Collision
+                if (seg.obstacle === 1) { // Center block
+                    const obsW = seg.width * 0.4;
+                    const obsLeft = seg.center - obsW/2;
+                    const obsRight = seg.center + obsW/2;
+                    if (x + r > obsLeft && x - r < obsRight) return true;
+                } else if (seg.obstacle === 2) { // Side blocks
+                    const obsW = seg.width * 0.25;
+                    // Left internal block
+                    if (x - r < leftWall + obsW) return true;
+                    // Right internal block
+                    if (x + r > rightWall - obsW) return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d', { alpha: false });
+        this.scoreDisplay = document.getElementById('scoreDisplay');
+        this.finalScoreDisplay = document.getElementById('finalScore');
+        
+        // Initialize Audio Engine
+        this.sound = new SoundManager();
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        this.input = { left: false, right: false };
+        this.bindEvents();
+        
+        this.state = 'MENU'; // MENU, PLAYING, GAMEOVER
+        this.lastTime = 0;
+        
+        // Game entities
+        this.player = {
+            pos: new Vector2(this.width / 2, this.height * 0.2),
+            vel: new Vector2(0, 0),
+            trail: []
+        };
+        
+        this.particles = [];
+    }
+
+    resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        if(this.player) this.player.pos.x = this.width/2;
+    }
+
+    bindEvents() {
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') this.input.left = true;
+            if (e.key === 'ArrowRight') this.input.right = true;
+            if (e.code === 'Space') {
+                if (this.state === 'MENU') this.start();
+                else if (this.state === 'GAMEOVER') this.reset();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') this.input.left = false;
+            if (e.key === 'ArrowRight') this.input.right = false;
+        });
+
+        // Touch controls
+        window.addEventListener('touchstart', (e) => {
+            if(this.state === 'MENU') {
+                 this.start();
+                 return;
+            }
+            if(this.state === 'GAMEOVER') {
+                this.reset();
+                return;
+            }
+            
+            const touchX = e.touches[0].clientX;
+            if (touchX < this.width / 2) this.input.left = true;
+            else this.input.right = true;
+        });
+
+        window.addEventListener('touchend', () => {
+            this.input.left = false;
+            this.input.right = false;
+        });
+    }
+
+    start() {
+        document.getElementById('startScreen').style.display = 'none';
+        
+        // Initialize Audio Context on user interaction
+        this.sound.init();
+        
+        this.reset();
+        this.loop(0);
+    }
+
+    reset() {
+        this.tunnel = new TunnelSystem(this.width, this.height);
+        this.player.pos = new Vector2(this.width / 2, this.height * 0.2);
+        this.player.vel = new Vector2(0, 0);
+        this.player.trail = [];
+        this.particles = [];
+        this.score = 0;
+        this.speed = CONFIG.BASE_SPEED;
+        this.state = 'PLAYING';
+        this.input = { left: false, right: false }; // Reset inputs to prevent stuck keys
+        
+        this.sound.startMusic();
+        
+        document.getElementById('gameOverScreen').style.display = 'none';
+    }
+
+    // UPDATED: Now receives delta time (dt) for framerate independence
+    update(dt) {
+        if (this.state !== 'PLAYING') return;
+
+        // --- Delta Time Normalization ---
+        // Target 60 FPS (16.67ms per frame). 
+        // If dt is 16.67, timeScale is 1.0. If dt is 8.33 (120hz), timeScale is 0.5.
+        // We cap dt at 100ms to prevent explosion on tab switching.
+        const safeDt = Math.min(dt, 100);
+        const timeScale = safeDt / (1000 / 60);
+
+        // Gradual speed increase with Cap (scaled by time)
+        if (this.speed < CONFIG.MAX_SPEED) {
+            this.speed += CONFIG.SPEED_INC * timeScale;
+        }
+
+        // Update Audio Wind Effect
+        const speedRatio = (this.speed - CONFIG.BASE_SPEED) / (CONFIG.MAX_SPEED - CONFIG.BASE_SPEED);
+        this.sound.updateWind(Math.max(0, Math.min(1, speedRatio)));
+
+        // Score increases by distance traveled (scaled)
+        this.score += (this.speed * 0.1) * timeScale;
+        this.scoreDisplay.textContent = Math.floor(this.score);
+
+        // Player Physics (Scaled)
+        // Acceleration scaling
+        if (this.input.left) this.player.vel.x -= CONFIG.ACCEL * timeScale;
+        if (this.input.right) this.player.vel.x += CONFIG.ACCEL * timeScale;
+
+        // Friction scaling: exponential decay requires power function
+        // v_new = v_old * FRICTION^timeScale
+        this.player.vel.x *= Math.pow(CONFIG.FRICTION, timeScale);
+        
+        // Position integration
+        this.player.pos.x += this.player.vel.x * timeScale;
+
+        // Trail Logic
+        if (Math.random() < 0.5 * timeScale) { // adjust probability by timeScale
+            this.player.trail.push({
+                x: this.player.pos.x, 
+                y: this.player.pos.y, 
+                alpha: 0.8,
+                width: CONFIG.PLAYER_SIZE * 2
+            });
+        }
+        
+        // Update Trail
+        for (let i = this.player.trail.length - 1; i >= 0; i--) {
+            const t = this.player.trail[i];
+            t.y -= this.speed * timeScale; // Trail moves up with world (scaled)
+            t.alpha -= 0.05 * timeScale;
+            t.width *= Math.pow(0.9, timeScale); // Decay width
+            if (t.alpha <= 0) this.player.trail.splice(i, 1);
+        }
+
+        // Speed lines/Particles
+        if (Math.random() < 0.3 * timeScale) {
+            this.particles.push(new Particle(
+                Math.random() * this.width,
+                this.height + 10,
+                this.speed * 1.5,
+                'rgba(255,255,255,0.1)'
+            ));
+        }
+        
+        // Update particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(timeScale);
+            if (this.particles[i].life <= 0) this.particles.splice(i, 1);
+        }
+
+        // Update Tunnel (Pass movement amount, not raw speed)
+        this.tunnel.update(this.speed * timeScale);
+        this.tunnel.checkLandmarks(this.player.pos.y, this.sound);
+
+        // Collision Detection
+        if (this.tunnel.checkCollision(this.player.pos.x, this.player.pos.y, CONFIG.PLAYER_SIZE)) {
+            this.gameOver();
+        }
+    }
+
+    draw() {
+        // Clear background
+        this.ctx.fillStyle = CONFIG.PATH_COLOR;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        // Draw Tunnel
+        if (this.tunnel) this.tunnel.draw(this.ctx);
+
+        // Draw Particles
+        this.particles.forEach(p => p.draw(this.ctx));
+
+        // Draw Player Trail
+        this.ctx.fillStyle = CONFIG.ACCENT_COLOR;
+        this.player.trail.forEach(t => {
+            this.ctx.globalAlpha = t.alpha * 0.5;
+            this.ctx.beginPath();
+            this.ctx.arc(t.x, t.y, t.width/2, 0, Math.PI*2);
+            this.ctx.fill();
+        });
+        this.ctx.globalAlpha = 1;
+
+        // Draw Player
+        if (this.state === 'PLAYING') {
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowColor = CONFIG.ACCENT_COLOR;
+            this.ctx.fillStyle = CONFIG.ACCENT_COLOR;
+            this.ctx.beginPath();
+            this.ctx.arc(this.player.pos.x, this.player.pos.y, CONFIG.PLAYER_SIZE, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.shadowBlur = 0;
+        }
+    }
+
+    gameOver() {
+        this.state = 'GAMEOVER';
+        this.sound.stopMusic();
+        this.sound.playCrash();
+        
+        this.finalScoreDisplay.textContent = Math.floor(this.score);
+        document.getElementById('gameOverScreen').style.display = 'flex';
+        
+        // Death effect (shake)
+        this.canvas.style.transform = `translate(${Math.random()*10-5}px, ${Math.random()*10-5}px)`;
+        setTimeout(() => this.canvas.style.transform = 'none', 50);
+    }
+
+    loop(timestamp) {
+        if (!this.lastTime) this.lastTime = timestamp;
+        const dt = timestamp - this.lastTime;
+        this.lastTime = timestamp;
+
+        this.update(dt);
+        this.draw();
+
+        requestAnimationFrame(this.loop.bind(this));
+    }
+}
+
+// Initialize
+const game = new Game();
+
+</script>
 </body>
 </html>

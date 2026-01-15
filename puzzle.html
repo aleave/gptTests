@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jigsaw Puzzle with Numeric Labels</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1400px;
+        }
+
+        .reference-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .reference-panel h2 {
+            margin-top: 0;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .reference-grid {
+            display: grid;
+            gap: 2px;
+            background: #ddd;
+            border: 2px solid #999;
+        }
+
+        .reference-cell {
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #667eea;
+            font-size: 24px;
+            border: 1px solid #ccc;
+        }
+
+        .puzzle-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .puzzle-panel h2 {
+            margin-top: 0;
+            color: #333;
+            font-size: 18px;
+        }
+
+        canvas {
+            border: 2px solid #999;
+            cursor: grab;
+            background: #f5f5f5;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .difficulty-select {
+            padding: 12px;
+            border-radius: 5px;
+            border: 2px solid #667eea;
+            font-size: 14px;
+            font-weight: bold;
+            background: white;
+            color: #667eea;
+        }
+
+        .info {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        .success-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+            text-align: center;
+        }
+
+        .success-message.show {
+            display: block;
+            animation: popIn 0.5s ease-out;
+        }
+
+        @keyframes popIn {
+            0% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 0;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 999;
+        }
+
+        .overlay.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧩 Jigsaw Puzzle with Numeric Labels</h1>
+
+    <div class="info">
+        <p><strong>How to solve:</strong> Drag the numbered puzzle pieces from the puzzle area to match the reference grid. Each number shows where that piece belongs!</p>
+    </div>
+
+    <div class="controls">
+        <div class="file-input-wrapper">
+            <button>📁 Load Your Image</button>
+            <input type="file" id="imageInput" accept="image/*">
+        </div>
+
+        <select id="difficulty" class="difficulty-select">
+            <option value="3">Easy (3×3)</option>
+            <option value="4" selected>Medium (4×4)</option>
+            <option value="5">Hard (5×5)</option>
+            <option value="6">Expert (6×6)</option>
+        </select>
+
+        <button id="shuffleBtn">🔀 Shuffle Pieces</button>
+        <button id="solveBtn">✨ Show Solution</button>
+        <button id="resetBtn">🔄 Reset</button>
+    </div>
+
+    <div class="container">
+        <div class="reference-panel">
+            <h2>📋 Reference Grid (Assembly Guide)</h2>
+            <div id="referenceGrid" class="reference-grid"></div>
+        </div>
+
+        <div class="puzzle-panel">
+            <h2>🧩 Puzzle Pieces</h2>
+            <canvas id="puzzleCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="success-message" id="successMessage">
+        <h2>🎉 Congratulations!</h2>
+        <p>You've successfully assembled the puzzle!</p>
+        <button onclick="puzzle.reset()">Play Again</button>
+    </div>
+
+    <script>
+        class JigsawPuzzle {
+            constructor() {
+                this.canvas = document.getElementById('puzzleCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.referenceGrid = document.getElementById('referenceGrid');
+                this.difficulty = 4;
+                this.pieces = [];
+                this.draggedPiece = null;
+                this.offsetX = 0;
+                this.offsetY = 0;
+                this.image = null;
+                this.solved = false;
+
+                // Default canvas size
+                this.canvasWidth = 600;
+                this.canvasHeight = 600;
+                this.canvas.width = this.canvasWidth;
+                this.canvas.height = this.canvasHeight;
+
+                this.setupEventListeners();
+                this.loadDefaultImage();
+            }
+
+            setupEventListeners() {
+                // Image upload
+                document.getElementById('imageInput').addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            this.loadImage(event.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+
+                // Difficulty change
+                document.getElementById('difficulty').addEventListener('change', (e) => {
+                    this.difficulty = parseInt(e.target.value);
+                    if (this.image) {
+                        this.initPuzzle();
+                    }
+                });
+
+                // Shuffle button
+                document.getElementById('shuffleBtn').addEventListener('click', () => {
+                    this.shufflePieces();
+                });
+
+                // Solve button
+                document.getElementById('solveBtn').addEventListener('click', () => {
+                    this.showSolution();
+                });
+
+                // Reset button
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    this.reset();
+                });
+
+                // Canvas mouse events
+                this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                this.canvas.addEventListener('mouseleave', (e) => this.onMouseUp(e));
+
+                // Canvas touch events
+                this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e));
+                this.canvas.addEventListener('touchmove', (e) => this.onTouchMove(e));
+                this.canvas.addEventListener('touchend', (e) => this.onTouchEnd(e));
+            }
+
+            loadDefaultImage() {
+                // Create a colorful default image with gradients
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 400;
+                tempCanvas.height = 400;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // Create gradient background
+                const gradient = tempCtx.createLinearGradient(0, 0, 400, 400);
+                gradient.addColorStop(0, '#ff6b6b');
+                gradient.addColorStop(0.25, '#4ecdc4');
+                gradient.addColorStop(0.5, '#45b7d1');
+                gradient.addColorStop(0.75, '#f7b731');
+                gradient.addColorStop(1, '#5f27cd');
+
+                tempCtx.fillStyle = gradient;
+                tempCtx.fillRect(0, 0, 400, 400);
+
+                // Add some shapes
+                for (let i = 0; i < 20; i++) {
+                    tempCtx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.3})`;
+                    tempCtx.beginPath();
+                    tempCtx.arc(
+                        Math.random() * 400,
+                        Math.random() * 400,
+                        Math.random() * 50 + 20,
+                        0,
+                        Math.PI * 2
+                    );
+                    tempCtx.fill();
+                }
+
+                // Add text
+                tempCtx.fillStyle = 'white';
+                tempCtx.font = 'bold 48px Arial';
+                tempCtx.textAlign = 'center';
+                tempCtx.textBaseline = 'middle';
+                tempCtx.shadowColor = 'rgba(0,0,0,0.5)';
+                tempCtx.shadowBlur = 10;
+                tempCtx.fillText('Sample', 200, 150);
+                tempCtx.fillText('Puzzle', 200, 250);
+
+                this.loadImage(tempCanvas.toDataURL());
+            }
+
+            loadImage(src) {
+                const img = new Image();
+                img.onload = () => {
+                    this.image = img;
+                    this.initPuzzle();
+                };
+                img.src = src;
+            }
+
+            initPuzzle() {
+                this.solved = false;
+                this.pieces = [];
+
+                const pieceWidth = this.canvasWidth / this.difficulty;
+                const pieceHeight = this.canvasHeight / this.difficulty;
+
+                // Calculate source dimensions
+                const imgAspect = this.image.width / this.image.height;
+                const canvasAspect = this.canvasWidth / this.canvasHeight;
+
+                let srcWidth, srcHeight, srcX, srcY;
+
+                // Cover the canvas (crop if needed)
+                if (imgAspect > canvasAspect) {
+                    srcHeight = this.image.height;
+                    srcWidth = srcHeight * canvasAspect;
+                    srcX = (this.image.width - srcWidth) / 2;
+                    srcY = 0;
+                } else {
+                    srcWidth = this.image.width;
+                    srcHeight = srcWidth / canvasAspect;
+                    srcX = 0;
+                    srcY = (this.image.height - srcHeight) / 2;
+                }
+
+                // Create pieces
+                let id = 1;
+                for (let row = 0; row < this.difficulty; row++) {
+                    for (let col = 0; col < this.difficulty; col++) {
+                        this.pieces.push({
+                            id: id,
+                            correctRow: row,
+                            correctCol: col,
+                            currentX: col * pieceWidth,
+                            currentY: row * pieceHeight,
+                            correctX: col * pieceWidth,
+                            correctY: row * pieceHeight,
+                            width: pieceWidth,
+                            height: pieceHeight,
+                            srcX: srcX + (col * srcWidth / this.difficulty),
+                            srcY: srcY + (row * srcHeight / this.difficulty),
+                            srcWidth: srcWidth / this.difficulty,
+                            srcHeight: srcHeight / this.difficulty,
+                            isDragging: false
+                        });
+                        id++;
+                    }
+                }
+
+                this.createReferenceGrid();
+                this.shufflePieces();
+            }
+
+            createReferenceGrid() {
+                this.referenceGrid.innerHTML = '';
+                this.referenceGrid.style.gridTemplateColumns = `repeat(${this.difficulty}, 1fr)`;
+
+                const cellSize = Math.min(80, 400 / this.difficulty);
+
+                for (let i = 1; i <= this.difficulty * this.difficulty; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'reference-cell';
+                    cell.textContent = i;
+                    cell.style.width = cellSize + 'px';
+                    cell.style.height = cellSize + 'px';
+                    this.referenceGrid.appendChild(cell);
+                }
+            }
+
+            shufflePieces() {
+                const positions = [];
+                for (let i = 0; i < this.pieces.length; i++) {
+                    positions.push({
+                        x: this.pieces[i].correctX,
+                        y: this.pieces[i].correctY
+                    });
+                }
+
+                // Fisher-Yates shuffle
+                for (let i = positions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [positions[i], positions[j]] = [positions[j], positions[i]];
+                }
+
+                // Assign shuffled positions
+                for (let i = 0; i < this.pieces.length; i++) {
+                    this.pieces[i].currentX = positions[i].x;
+                    this.pieces[i].currentY = positions[i].y;
+                }
+
+                this.draw();
+            }
+
+            showSolution() {
+                for (let piece of this.pieces) {
+                    piece.currentX = piece.correctX;
+                    piece.currentY = piece.correctY;
+                }
+                this.draw();
+                this.checkSolution();
+            }
+
+            reset() {
+                document.getElementById('overlay').classList.remove('show');
+                document.getElementById('successMessage').classList.remove('show');
+                this.shufflePieces();
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+                // Draw all pieces
+                for (let piece of this.pieces) {
+                    // Draw piece image
+                    this.ctx.drawImage(
+                        this.image,
+                        piece.srcX, piece.srcY, piece.srcWidth, piece.srcHeight,
+                        piece.currentX, piece.currentY, piece.width, piece.height
+                    );
+
+                    // Draw border
+                    this.ctx.strokeStyle = piece.isDragging ? '#667eea' : '#999';
+                    this.ctx.lineWidth = piece.isDragging ? 3 : 1;
+                    this.ctx.strokeRect(piece.currentX, piece.currentY, piece.width, piece.height);
+
+                    // Draw numeric label
+                    this.ctx.save();
+                    this.ctx.font = `bold ${Math.min(piece.width, piece.height) * 0.4}px Arial`;
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+
+                    const textX = piece.currentX + piece.width / 2;
+                    const textY = piece.currentY + piece.height / 2;
+
+                    // Draw text with outline
+                    this.ctx.strokeText(piece.id.toString(), textX, textY);
+                    this.ctx.fillText(piece.id.toString(), textX, textY);
+                    this.ctx.restore();
+
+                    // Highlight if in correct position
+                    if (this.isInCorrectPosition(piece)) {
+                        this.ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
+                        this.ctx.fillRect(piece.currentX, piece.currentY, piece.width, piece.height);
+                    }
+                }
+
+                // Draw dragged piece on top
+                if (this.draggedPiece) {
+                    const piece = this.draggedPiece;
+                    this.ctx.save();
+                    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    this.ctx.shadowBlur = 20;
+
+                    this.ctx.drawImage(
+                        this.image,
+                        piece.srcX, piece.srcY, piece.srcWidth, piece.srcHeight,
+                        piece.currentX, piece.currentY, piece.width, piece.height
+                    );
+
+                    this.ctx.strokeStyle = '#667eea';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeRect(piece.currentX, piece.currentY, piece.width, piece.height);
+
+                    // Draw label on dragged piece
+                    this.ctx.font = `bold ${Math.min(piece.width, piece.height) * 0.4}px Arial`;
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+
+                    const textX = piece.currentX + piece.width / 2;
+                    const textY = piece.currentY + piece.height / 2;
+
+                    this.ctx.strokeText(piece.id.toString(), textX, textY);
+                    this.ctx.fillText(piece.id.toString(), textX, textY);
+
+                    this.ctx.restore();
+                }
+            }
+
+            isInCorrectPosition(piece) {
+                const threshold = 5;
+                return Math.abs(piece.currentX - piece.correctX) < threshold &&
+                       Math.abs(piece.currentY - piece.correctY) < threshold;
+            }
+
+            getPieceAt(x, y) {
+                // Check from top to bottom (reverse order) to get topmost piece
+                for (let i = this.pieces.length - 1; i >= 0; i--) {
+                    const piece = this.pieces[i];
+                    if (x >= piece.currentX && x <= piece.currentX + piece.width &&
+                        y >= piece.currentY && y <= piece.currentY + piece.height) {
+                        return piece;
+                    }
+                }
+                return null;
+            }
+
+            getCanvasCoordinates(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+                return {
+                    x: (clientX - rect.left) * scaleX,
+                    y: (clientY - rect.top) * scaleY
+                };
+            }
+
+            onMouseDown(e) {
+                const coords = this.getCanvasCoordinates(e);
+                const piece = this.getPieceAt(coords.x, coords.y);
+
+                if (piece) {
+                    this.draggedPiece = piece;
+                    piece.isDragging = true;
+                    this.offsetX = coords.x - piece.currentX;
+                    this.offsetY = coords.y - piece.currentY;
+
+                    // Move to end of array (draw on top)
+                    const index = this.pieces.indexOf(piece);
+                    this.pieces.splice(index, 1);
+                    this.pieces.push(piece);
+
+                    this.draw();
+                }
+            }
+
+            onMouseMove(e) {
+                if (this.draggedPiece) {
+                    const coords = this.getCanvasCoordinates(e);
+                    this.draggedPiece.currentX = coords.x - this.offsetX;
+                    this.draggedPiece.currentY = coords.y - this.offsetY;
+                    this.draw();
+                }
+            }
+
+            onMouseUp(e) {
+                if (this.draggedPiece) {
+                    this.draggedPiece.isDragging = false;
+                    this.snapToGrid(this.draggedPiece);
+                    this.draggedPiece = null;
+                    this.draw();
+                    this.checkSolution();
+                }
+            }
+
+            onTouchStart(e) {
+                e.preventDefault();
+                this.onMouseDown(e);
+            }
+
+            onTouchMove(e) {
+                e.preventDefault();
+                this.onMouseMove(e);
+            }
+
+            onTouchEnd(e) {
+                e.preventDefault();
+                this.onMouseUp(e);
+            }
+
+            snapToGrid(piece) {
+                const pieceWidth = this.canvasWidth / this.difficulty;
+                const pieceHeight = this.canvasHeight / this.difficulty;
+
+                const centerX = piece.currentX + piece.width / 2;
+                const centerY = piece.currentY + piece.height / 2;
+
+                const col = Math.round(centerX / pieceWidth);
+                const row = Math.round(centerY / pieceHeight);
+
+                const targetX = Math.max(0, Math.min(col - 0.5, this.difficulty - 1)) * pieceWidth;
+                const targetY = Math.max(0, Math.min(row - 0.5, this.difficulty - 1)) * pieceHeight;
+
+                // Check if position is occupied
+                let occupied = false;
+                for (let other of this.pieces) {
+                    if (other !== piece &&
+                        Math.abs(other.currentX - targetX) < 1 &&
+                        Math.abs(other.currentY - targetY) < 1) {
+                        // Swap positions
+                        const tempX = other.currentX;
+                        const tempY = other.currentY;
+                        other.currentX = piece.currentX;
+                        other.currentY = piece.currentY;
+                        piece.currentX = tempX;
+                        piece.currentY = tempY;
+                        occupied = true;
+                        break;
+                    }
+                }
+
+                if (!occupied) {
+                    piece.currentX = targetX;
+                    piece.currentY = targetY;
+                }
+            }
+
+            checkSolution() {
+                let allCorrect = true;
+                for (let piece of this.pieces) {
+                    if (!this.isInCorrectPosition(piece)) {
+                        allCorrect = false;
+                        break;
+                    }
+                }
+
+                if (allCorrect && !this.solved) {
+                    this.solved = true;
+                    setTimeout(() => {
+                        document.getElementById('overlay').classList.add('show');
+                        document.getElementById('successMessage').classList.add('show');
+                    }, 300);
+                }
+            }
+        }
+
+        // Initialize puzzle
+        const puzzle = new JigsawPuzzle();
+    </script>
+</body>
+</html>
